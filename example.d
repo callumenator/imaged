@@ -2,14 +2,17 @@
 module example;
 
 import jpeg;
+import png;
 import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
 {
 
-    string filename = "testimages/lion.jpg";
-    Jpeg pic = new Jpeg(filename);
+    string filename = "testimages/Operah.png";
+    //Jpeg pic = new Jpeg(filename);
+    Png pic = new Png(filename);
 
+    /++
     pic.RGB.resize(pic.RGB.width/2, pic.RGB.height/2);
 
     /// Make a window and simpledisplay image
@@ -27,6 +30,7 @@ int main()
     /// Show the image in the window
     wnd.draw().drawImage(sd.Point(0,0), sd_image);
     wnd.eventLoop(0, (int) { wnd.close(); });
+    ++/
 
     return 0;
 }

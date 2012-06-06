@@ -378,7 +378,6 @@ class Jpeg {
     Marker currentMarker = Marker.None;
     Marker previousMarker = Marker.None;
     bool markerPending = false;
-    void delegate() currentAction;
 
     string format = "unknown"; /// File format (will only do JFIF)
     string type = "unknown";
@@ -388,14 +387,6 @@ class Jpeg {
         int code;
     }
     Error errorState;
-
-
-    struct Segment {
-        bool headerProcessed;
-        int headerLength;
-        ubyte[] buffer;
-    }
-    Segment segment;
 
     short x, y;
     ubyte nComponents, precision;
@@ -422,17 +413,8 @@ class Jpeg {
     ubyte[hashKey] huffmanTable;
 
 
-    /// Construct empty
-    this() {
-        /// Initialize with a do-nothing delegate
-        currentAction = &emptyAction;
-    }
-
-
     /// Construct with a filename, and parse data
     this(string filename) {
-
-        this();
 
         /// Loop through the image data
         auto data = cast(ubyte[]) read(filename);
@@ -506,8 +488,6 @@ class Jpeg {
 
 private:
 
-    int scanCount;
-
     /// Track the state of a scan segment
     struct ScanState {
         short cmpIdx = 0;
@@ -527,6 +507,12 @@ private:
     }
     ScanState scState; /// ditto
 
+    struct Segment {
+        bool headerProcessed;
+        int headerLength;
+        ubyte[] buffer;
+    }
+    Segment segment;
 
     void YCbCrtoRGB(){}
 
@@ -919,8 +905,6 @@ private:
 
     /// End of Image
     void endOfImage() {
-
-        scanCount ++;
 
         if (nComponents == 3) {
             Image Y = Image(components[0].data, components[0].x, components[0].y,
