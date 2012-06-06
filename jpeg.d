@@ -9,12 +9,6 @@ ubyte clamp(const int x) {
 }
 
 
-interface Image {
-
-    void resize(int newWidth, int newHeight);
-
-}
-
 
 struct Image {
 
