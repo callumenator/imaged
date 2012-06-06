@@ -1,0 +1,3 @@
+Routines for loading images. Currently only a baseline Jpeg decoder, more formats to come. 
+
+simpledisplay.d is from Adam Ruppe's repo: misc-stuff-including-D-programming-language-web-stuff. 
