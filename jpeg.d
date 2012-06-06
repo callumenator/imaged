@@ -1,7 +1,16 @@
-module jpeg;
+// Written in the D programming language.
+
+/++
++ Copyright: Copyright 2012 -
++ License: $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
++ Authors: Callum Anderson
++ Date: June 6, 2012
++/
+module imaged.jpeg;
 
 import std.string, std.file, std.stdio, std.math,
        std.range, std.algorithm, std.conv;
+
 
 /// Clamp an integer to 0-255 (ubyte)
 ubyte clamp(const int x) {
@@ -9,7 +18,12 @@ ubyte clamp(const int x) {
 }
 
 
-
+/**
+* Temporary image structure allowing resizing (bilinear interpolation).
+* This structure is only temporary, as it is not flexible enough for
+* general image formats (it currently only supports 8-bit RGB.
+* It will be replaced.
+*/
 struct Image {
 
     /// Define how the image is logically stored in the buffer
@@ -203,6 +217,10 @@ private:
     */
     void resizeBilinear(int newWidth, int newHeight) {
 
+        /**
+        * Calculated a pixel value from src, interpolated to x, y. This implementation is from:
+        * http://fastcpp.blogspot.com/2011/06/bilinear-pixel-interpolation-using-sse.html
+        */
         Pixel getInterpolatedPixel(Pixel src[], float x, float y) {
 
             int x0 = cast(int)x;
@@ -224,16 +242,16 @@ private:
             Pixel p2 = src[((x0+1) + (y0*_width))];
             Pixel p4 = src[((x0+1) + ((y0+1)*_width))];
 
-            int w1 = cast(int)(fx1 * fy1 * 256.0f);
-            int w2 = cast(int)(fx  * fy1 * 256.0f);
-            int w3 = cast(int)(fx1 * fy  * 256.0f);
-            int w4 = cast(int)(fx  * fy  * 256.0f);
+            int wgt1 = cast(int)(fx1 * fy1 * 256.0f);
+            int wgt2 = cast(int)(fx  * fy1 * 256.0f);
+            int wgt3 = cast(int)(fx1 * fy  * 256.0f);
+            int wgt4 = cast(int)(fx  * fy  * 256.0f);
 
-            int outr = (p1.r * w1 + p2.r * w2 + p3.r * w3 + p4.r * w4) >> 8;
-            int outg = (p1.g * w1 + p2.g * w2 + p3.g * w3 + p4.g * w4) >> 8;
-            int outb = (p1.b * w1 + p2.b * w2 + p3.b * w3 + p4.b * w4) >> 8;
+            int r = (p1.r * wgt1 + p2.r * wgt2 + p3.r * wgt3 + p4.r * wgt4) >> 8;
+            int g = (p1.g * wgt1 + p2.g * wgt2 + p3.g * wgt3 + p4.g * wgt4) >> 8;
+            int b = (p1.b * wgt1 + p2.b * wgt2 + p3.b * wgt3 + p4.b * wgt4) >> 8;
 
-            return Pixel(cast(ubyte)outr, cast(ubyte)outg, cast(ubyte)outb);
+            return Pixel(cast(ubyte)r, cast(ubyte)g, cast(ubyte)b);
         }
 
         /// Copy the current image data
@@ -270,14 +288,13 @@ private:
 }
 
 
-
-
-
-/// Awesome reference baseline JPEG deconding: http://www.opennet.ru/docs/formats/jpeg.txt
-
+/**
+* Jpeg class, which handles decoding. Great reference for baseline JPEG
+* deconding: http://www.opennet.ru/docs/formats/jpeg.txt.
+*/
 class Jpeg {
 
-/// Markers courtesy of http://techstumbler.blogspot.com/2008/09/jpeg-marker-codes.html
+    /// Markers courtesy of http://techstumbler.blogspot.com/2008/09/jpeg-marker-codes.html
     enum Marker
     {
         None = 0x00,
@@ -365,7 +382,6 @@ class Jpeg {
 
     string format = "unknown"; /// File format (will only do JFIF)
     string type = "unknown";
-
 
     struct Error {
         string message;
@@ -822,7 +838,7 @@ private:
         int bit0 = bits >> (needBits-1);
         int offset = 2^^needBits;
         return (bits & ((1 << (needBits-1)) - 1)) + (bit0*offset/2 - (1-bit0)*(offset - 1));
-    }
+    } /// fetchDCTComponent
 
 
     /// Have reached the end of a block, within a scan
@@ -1062,6 +1078,4 @@ private:
         outData[3] = clamp((x3+t0) >> 17);
         outData[4] = clamp((x3-t0) >> 17);
     } /// IDCT_1D_ROW
-
-
-}
+} /// class Jpeg
