@@ -17,6 +17,11 @@ ubyte clamp(const int x) {
     return (x < 0) ? 0 : ((x > 0xFF) ? 0xFF : cast(ubyte) x);
 }
 
+struct IMGError {
+    string message;
+    int code;
+}
+
 
 /**
 * Temporary image structure allowing resizing (bilinear interpolation).
@@ -382,12 +387,6 @@ class Jpeg {
     string format = "unknown"; /// File format (will only do JFIF)
     string type = "unknown";
 
-    struct Error {
-        string message;
-        int code;
-    }
-    Error errorState;
-
     short x, y;
     ubyte nComponents, precision;
     Image RGB;
@@ -459,7 +458,7 @@ class Jpeg {
             } else {
                 previousMarker = currentMarker;
                 currentMarker = cast(Marker) bite;
-                segment = Segment();
+                segment = JPGSegment();
                 return;
             }
         }
@@ -507,12 +506,15 @@ private:
     }
     ScanState scState; /// ditto
 
-    struct Segment {
+    struct JPGSegment {
         bool headerProcessed;
         int headerLength;
         ubyte[] buffer;
     }
-    Segment segment;
+
+
+    JPGSegment segment;
+    IMGError errorState;
 
     void YCbCrtoRGB(){}
 

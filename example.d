@@ -8,7 +8,9 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-    string filename = "testimages/Operah.png";
+
+
+    string filename = "testimages/Opera.png";
     //Jpeg pic = new Jpeg(filename);
     Png pic = new Png(filename);
 
@@ -32,5 +34,5 @@ int main()
     wnd.eventLoop(0, (int) { wnd.close(); });
     ++/
 
-    return 0;
+    return 1;
 }
