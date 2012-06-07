@@ -1,6 +1,8 @@
 
 module example;
 
+import std.stdio;
+
 import jpeg;
 import png;
 import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
@@ -8,14 +10,12 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-
-
-    string filename = "testimages/Opera.png";
+    string filename = "testimages/earth.png";
     //Jpeg pic = new Jpeg(filename);
     Png pic = new Png(filename);
 
-    /++
-    pic.RGB.resize(pic.RGB.width/2, pic.RGB.height/2);
+
+    //pic.RGB.resize(pic.RGB.width/2, pic.RGB.height/2);
 
     /// Make a window and simpledisplay image
     sd.SimpleWindow wnd = new sd.SimpleWindow(pic.RGB.width, pic.RGB.height);
@@ -32,7 +32,7 @@ int main()
     /// Show the image in the window
     wnd.draw().drawImage(sd.Point(0,0), sd_image);
     wnd.eventLoop(0, (int) { wnd.close(); });
-    ++/
+
 
     return 1;
 }
