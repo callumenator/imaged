@@ -198,8 +198,9 @@ private:
 
                 debug {
                     writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
-                             "Compression: %s\nFilter: %s\nInterlacing: %s", m_width, m_height, m_bitDepth, m_colorType,
-                             m_compression, m_filter, m_interlace);
+                             "Compression: %s\nFilter: %s\nInterlacing: %s\nStride: %s",
+                             m_width, m_height, m_bitDepth, m_colorType,
+                             m_compression, m_filter, m_interlace, m_stride);
                 }
                 break;
             }
@@ -271,6 +272,11 @@ private:
                     break;
                 }
 
+                case(4): { /// Paeth filter
+                    filter4(line, data);
+                    break;
+                }
+
                 default: {
                     writeln("PNG: Unhandled filter (" ~ to!string(filter) ~ ") on scan line "
                             ~ to!string(line));
@@ -330,7 +336,7 @@ private:
             foreach(col; 0..m_width) {
                 x = getPixelIndex(col,y);
                 b = getPixelIndex(col,y-1);
-                data[x..x+m_stride] += data[b-m_stride..b];
+                data[x..x+m_stride] += data[b..b+m_stride];
                 RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
             }
         }
@@ -347,7 +353,7 @@ private:
 
             foreach(col; 1..m_width) {
                 x = getPixelIndex(col,y);
-                data[x..x+m_stride] += data[x-m_stride..x] / 2;
+                data[x..x+m_stride] += cast(ubyte[])(data[x-m_stride..x] / 2);
                 RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
             }
 
@@ -356,16 +362,75 @@ private:
             /// Do the first col
             uint x = getPixelIndex(0,y);
             uint b = getPixelIndex(0,y-1);
-            data[x..x+m_stride] += data[b..b+m_stride] / 2;
+            data[x..x+m_stride] += cast(ubyte[]) (data[b..b+m_stride] / 2);
             RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
 
             foreach(col; 1..m_width) {
                 x = getPixelIndex(col,y);
                 b = getPixelIndex(col,y-1);
-                data[x..x+m_stride] += cast(ubyte[])(data[x-m_stride..x] + data[b..b+m_stride])/2;
+                data[x..x+m_stride] += cast(ubyte[])((data[x-m_stride..x] + data[b..b+m_stride])/2);
                 RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
             }
         }
+    }
+
+    /// Apply filter 4 to scanline (Paeth filter)
+    void filter4(uint y, ubyte[] data) {
+
+        int paeth(ubyte a, ubyte b, ubyte c) {
+            int p = (a + b - c);
+            int pa = abs(p - a);
+            int pb = abs(p - b);
+            int pc = abs(p - c);
+
+            int pred = 0;
+            if ((pa <= pb) && (pa <= pc)) {
+                pred = a;
+            } else if (pb <= pc) {
+                pred = b;
+            } else {
+                pred = c;
+            }
+            return pred;
+        }
+
+        if (y == 0) {
+
+            /// Do the first col
+            uint x = getPixelIndex(0,y);
+            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+
+            foreach(col; 1..m_width) {
+                x = getPixelIndex(col,y);
+                data[x] += paeth(data[x-m_stride], 0, 0);
+                data[x + 1] += paeth(data[x+1-m_stride], 0, 0);
+                data[x + 2] += paeth(data[x+2-m_stride], 0, 0);
+                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            }
+
+        } else {
+
+            /// Do the first col
+            uint x = getPixelIndex(0,y);
+            uint b = getPixelIndex(0,y-1);
+            data[x] += paeth(0, data[b], 0);
+            data[x + 1] += paeth(0, data[b + 1], 0);
+            data[x + 2] += paeth(0, data[b + 2], 0);
+            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+
+            foreach(col; 1..m_width) {
+                x = getPixelIndex(col,y);
+                b = getPixelIndex(col,y-1);
+                data[x] += paeth(data[x-m_stride], data[b], data[b-m_stride]);
+                data[x + 1] += paeth(data[x+1-m_stride], data[b+1], data[b+1-m_stride]);
+                data[x + 2] += paeth(data[x+2-m_stride], data[b+2], data[b+2-m_stride]);
+                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            }
+        }
+
+
+
+
     }
 
 
