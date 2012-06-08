@@ -127,7 +127,8 @@ private:
         m_filter,
         m_interlace,
         m_bytesPerScanline,
-        m_nChannels;
+        m_nChannels,
+        m_stride;
 
     /**
     * Color types are:
@@ -193,6 +194,8 @@ private:
                     default: break;
                 }
 
+                m_stride = m_nChannels*(m_bitDepth/8);
+
                 debug {
                     writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
                              "Compression: %s\nFilter: %s\nInterlacing: %s", m_width, m_height, m_bitDepth, m_colorType,
@@ -242,52 +245,128 @@ private:
 
         RGB = Image(m_width, m_height, Image.Format.R8G8B8);
 
-        uint stride = m_nChannels*(m_bitDepth/8);
-
-        uint offset = 0;
         foreach(line; 0..m_height) {
 
             /// Filters can change between scan lines
-            ubyte filter = data[offset];
-            offset ++;
+            ubyte filter = data[getPixelIndex(0, line)-1];
 
             switch(filter) {
                 case(0): { /// no filtering, excellent
-                    foreach(col; 0..m_width) {
-                        RGB[col, line] = Image.Pixel(swapEndian(data[offset]),
-                                                     swapEndian(data[offset + 1]),
-                                                     swapEndian(data[offset + 2]));
-                        offset += stride;
-                    }
+                    filter0(line, data);
                     break;
                 }
 
-                case(1): { /// no filtering, excellent
+                case(1): { /// difference filter, using previous pixel on same scanline
+                    filter1(line, data);
+                    break;
+                }
 
-                    RGB[0, line] = Image.Pixel(cast(ubyte)(data[offset]),
-                                               cast(ubyte)(data[offset + 1]),
-                                               cast(ubyte)(data[offset + 2]));
-                    offset += stride;
+                case(2): { /// difference filter, using pixel on scanline above, same column
+                    filter2(line, data);
+                    break;
+                }
 
-                    foreach(col; 1..m_width) {
-                        RGB[col, line] = Image.Pixel(cast(ubyte)(data[offset] + data[offset - stride]),
-                                                     cast(ubyte)(data[offset + 1] + data[offset + 1 - stride]),
-                                                     cast(ubyte)(data[offset + 2] + data[offset + 2 - stride]));
-                        offset += stride;
-                    }
+                case(3): { /// average filter, average of pixel above and pixel to left
+                    filter3(line, data);
                     break;
                 }
 
                 default: {
-                    foreach(col; 0..m_width) {
-                        offset += stride;
-                    }
                     writeln("PNG: Unhandled filter (" ~ to!string(filter) ~ ") on scan line "
                             ~ to!string(line));
                     break;
                 }
             }
         }
+    } /// uncompressStream
+
+
+    /// Return the 1D offset for a given pixel at x, y
+    uint getPixelIndex(int x, int y) {
+
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+
+        /// Remeber that each 'row'/scanline starts with 1 byte, for the filter type
+        return x*m_nChannels*(m_bitDepth/8) + y*m_width*m_nChannels*(m_bitDepth/8) + (y+1);
     }
+
+
+    /// Apply filter 0 to scanline (no filter)
+    void filter0(uint y, ubyte[] data) {
+        uint x;
+        foreach(col; 0..m_width) {
+            x = getPixelIndex(col,y);
+            RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+        }
+    }
+
+    /// Apply filter 1 to scanline (difference filter)
+    void filter1(uint y, ubyte[] data) {
+
+        uint x = getPixelIndex(0,y);
+        RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+
+        foreach(col; 1..m_width) {
+            x = getPixelIndex(col,y);
+            data[x..x+m_stride] += data[x-m_stride..x];
+            RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+        }
+    }
+
+    /// Apply filter 2 to scanline (difference filter, using scanline above)
+    void filter2(uint y, ubyte[] data) {
+
+        if (y == 0) {
+
+            foreach(col; 0..m_width) {
+                uint x = getPixelIndex(col,y);
+                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            }
+
+        } else {
+
+            uint x, b = 0;
+            foreach(col; 0..m_width) {
+                x = getPixelIndex(col,y);
+                b = getPixelIndex(col,y-1);
+                data[x..x+m_stride] += data[b-m_stride..b];
+                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            }
+        }
+    }
+
+    /// Apply filter 3 to scanline (average filter)
+    void filter3(uint y, ubyte[] data) {
+
+        if (y == 0) {
+
+            /// Do the first col
+            uint x = getPixelIndex(0,y);
+            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+
+            foreach(col; 1..m_width) {
+                x = getPixelIndex(col,y);
+                data[x..x+m_stride] += data[x-m_stride..x] / 2;
+                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            }
+
+        } else {
+
+            /// Do the first col
+            uint x = getPixelIndex(0,y);
+            uint b = getPixelIndex(0,y-1);
+            data[x..x+m_stride] += data[b..b+m_stride] / 2;
+            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+
+            foreach(col; 1..m_width) {
+                x = getPixelIndex(col,y);
+                b = getPixelIndex(col,y-1);
+                data[x..x+m_stride] += cast(ubyte[])(data[x-m_stride..x] + data[b..b+m_stride])/2;
+                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            }
+        }
+    }
+
 
 }
