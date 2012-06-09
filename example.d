@@ -1,7 +1,7 @@
 
 module example;
 
-import std.stdio;
+import std.stdio, std.datetime;
 
 import image;
 import jpeg;
@@ -11,8 +11,23 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-    string filename = "testimages/lion.jpg";
-    Jpeg pic = new Jpeg(filename);
+    string filename = "testimages/pier.jpeg";
+
+    Jpeg pic;
+
+    StopWatch sw;
+
+    sw.start();
+
+    int count = 1;
+    foreach(i; 0..count) {
+        pic = new Jpeg(filename);
+        writeln(i);
+    }
+
+    sw.stop();
+    writeln();
+    writeln(sw.peek().msecs/cast(float)count);
     //Png pic = new Png(filename);
 
 

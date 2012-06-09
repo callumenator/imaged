@@ -41,6 +41,7 @@ interface Image {
     @property int pixelStride();
     @property int bitsPerChannel();
     @property ref ubyte[] pixels();
+    @property ubyte* pixelsPtr();
 }
 
 
@@ -116,6 +117,7 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
     @property int pixelStride() { return m_pixelStride; }
     @property int bitsPerChannel() { return m_bitsPerChannel; }
     @property ref ubyte[] pixels() { return m_data; }
+    @property ubyte* pixelsPtr() { return m_data.ptr; }
 
 
 private:
@@ -184,13 +186,24 @@ private:
         m_width = newWidth;
         m_height = newHeight;
 
+        uint i = 0;
+
         /// Loop through rows and columns of the new image
         foreach (row; 0..newHeight) {
             foreach (col; 0..newWidth) {
                 float x = cast(float)(oldImg.width-1) * (cast(float)col/cast(float)(newWidth));
                 float y = cast(float)(oldImg.height-1) * (cast(float)row/cast(float)(newHeight));
-                this.setPixel(col, row, getBilinearInterpolate(oldImg, x, y));
+
+                Pixel p = getBilinearInterpolate(oldImg, x, y);
+                static if (N == 1 && S == 8) {
+                    m_data[i+col] = cast(ubyte)p.r;
+                } else if (N == 3 && S == 8) {
+                    m_data[(i+col)*3..(i+col)*3+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
+                } else if (N == 4 && S == 8) {
+                    m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
+                }
             } /// columns
+            i += m_width;
         }
     } /// Resize
 

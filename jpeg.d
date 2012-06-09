@@ -9,7 +9,7 @@
 module jpeg;
 
 import std.string, std.file, std.stdio, std.math,
-       std.range, std.algorithm, std.conv;
+       std.range, std.algorithm, std.conv, std.datetime;
 
 import image;
 
@@ -145,7 +145,10 @@ class Jpeg {
 
 
     /// Construct with a filename, and parse data
-    this(string filename) {
+    this(string filename, bool logging = false, bool profiling = false) {
+
+        m_logging = logging;
+        m_profiling = profiling;
 
         /// Loop through the image data
         auto data = cast(ubyte[]) read(filename);
@@ -201,7 +204,11 @@ class Jpeg {
                 segment.headerLength = (segment.buffer[0] << 8 | segment.buffer[1]);
                 return;
             } else if (segment.buffer.length == segment.headerLength) {
-                writeln(currentMarker);
+
+                debug {
+                    if (m_logging) writeln(currentMarker);
+                }
+
                 processHeader();
                 segment.headerProcessed = true;
                 segment.buffer.clear;
@@ -243,16 +250,19 @@ private:
         int headerLength;
         ubyte[] buffer;
     }
-
-
     JPGSegment segment;
     IMGError errorState;
 
+    bool m_logging;
+    bool m_profiling;
+
+    debug {
+        StopWatch m_timer;
+        bool m_inScanFlag;
+    }
+
+
     void YCbCrtoRGB(){}
-
-
-    /// An empty action delegate
-    void emptyAction() {}
 
 
     /// Process a segment header
@@ -270,7 +280,7 @@ private:
                 comment = cast(char[])segment.buffer[2..$];
 
                 debug {
-                    writeln("JPEG: Comment: ", comment);
+                    if (m_logging) writeln("JPEG: Comment: ", comment);
                 }
                 break;
             }
@@ -289,7 +299,7 @@ private:
                 scState.restartInterval = cast(int) (segment.buffer[2] << 8 | segment.buffer[3]);
 
                 debug {
-                    writeln("JPEG: Restart interval = ", scState.restartInterval);
+                    if (m_logging) writeln("JPEG: Restart interval = ", scState.restartInterval);
                 }
                 break;
             }
@@ -303,7 +313,7 @@ private:
                     quantTable[index] = segment.buffer[i+1..i+1+64].dup;
 
                     debug {
-                        writefln("JPEG: Quantization table %s defined", index);
+                        if (m_logging) writefln("JPEG: Quantization table %s defined", index);
                     }
                 }
 
@@ -328,7 +338,7 @@ private:
                     i += 3;
 
                     debug {
-                        writefln("JPEG: Component %s defined", cmp);
+                        if (m_logging) writefln("JPEG: Component %s defined", cmp);
                     }
                 }
 
@@ -337,6 +347,10 @@ private:
 
             /// Huffman Table Definition, the mapping between bitcodes and Huffman codes
             case(Marker.HuffmanTableDef): {
+
+                debug {
+                    if (m_profiling) m_timer.start();
+                }
 
                 int i = 2;
                 while (i < segment.buffer.length) {
@@ -372,6 +386,13 @@ private:
                             i ++;
                         }
                     } /// while storedCodes != totalCodes
+                }
+
+                debug {
+                    if (m_profiling) {
+                        m_timer.stop();
+                        writeln("JPEG Prof: Huffman Def - ", m_timer.peek().msecs);
+                    }
                 }
                 break;
             }
@@ -420,7 +441,7 @@ private:
                     cmp.data = new ubyte[](cmp.x*cmp.y);
 
                     debug {
-                        writefln("Component %s, x:%s, y:%s", idx, cmp.x, cmp.y);
+                       if (m_logging) writefln("Component %s, x:%s, y:%s", idx, cmp.x, cmp.y);
                     }
                 }
 
@@ -429,7 +450,7 @@ private:
 
             default: {
                 debug {
-                    writeln("JPEG: ProcessHeader called on un-handled segment: ", currentMarker);
+                    if (m_logging) writeln("JPEG: ProcessHeader called on un-handled segment: ", currentMarker);
                 }
                 break;
             }
@@ -440,6 +461,13 @@ private:
 
     /// Start of scan (image)
     void sosAction(ubyte bite) {
+
+        debug {
+            if (m_profiling && !m_inScanFlag) {
+                m_timer.start();
+                m_inScanFlag = true;
+            }
+        }
 
         /// Put the new bite into the buffer
         scState.buffer = scState.buffer << 8 | bite ;
@@ -640,11 +668,23 @@ private:
     /// End of Image
     void endOfImage() {
 
+        debug {
+            if (m_profiling) {
+                m_timer.stop();
+                m_inScanFlag = false;
+                writeln("JPEG Prof: Scan - ",  m_timer.peek().msecs);
+            }
+        }
+
         if (nComponents == 3) {
 
-            Image Y = new ImageT!(1,8)(components[0].x, components[0].y, components[0].data);
+            Image Y  = new ImageT!(1,8)(components[0].x, components[0].y, components[0].data);
             Image Cb = new ImageT!(1,8)(components[1].x, components[1].y, components[1].data);
             Image Cr = new ImageT!(1,8)(components[2].x, components[2].y, components[2].data);
+
+            debug {
+                if (m_profiling) m_timer.start();
+            }
 
             /// Resize the chroma components if required
             if (Cb.width != Y.width || Cb.height != Y.height)
@@ -653,26 +693,53 @@ private:
             if (Cr.width != Y.width || Cr.height != Y.height)
                 Cr.resize(Y.width, Y.height);
 
-            /// Convert to RGB
-            RGB = new ImageT!(3,8)(Y.width, Y.height);
-
-            foreach(y; 0..Y.height) {
-                foreach(x; 0..Y.width) {
-                    Pixel pix = Pixel(clamp(cast(int)(Y[x,y].r + 1.402*(Cr[x,y].r-128))),
-                                      clamp(cast(int)(Y[x,y].r - 0.34414*(Cb[x,y].r-128) - 0.71414*(Cr[x,y].r-128) )),
-                                      clamp(cast(int)(Y[x,y].r + 1.772*(Cb[x,y].r-128))),
-                                      0);
-                    RGB.setPixel(x,y,pix);
+            debug {
+                if (m_profiling) {
+                    m_timer.stop();
+                    writeln("JPEG Prof: EnfOfImage, resize - ", m_timer.peek().msecs);
+                    m_timer.start();
                 }
             }
 
-            //RGB = Image(R, G, B);
+            /// Convert to RGB
+            RGB = new ImageT!(3,8)(Y.width, Y.height);
+            ubyte[] RGBref = RGB.pixels;
+            ubyte[] Yref = Y.pixels;
+            ubyte[] Cbref = Cb.pixels;
+            ubyte[] Crref = Cr.pixels;
+            int r, g, b, i = 0, stride = Y.width;
+
+            foreach(y; 0..Y.height) {
+                foreach(x; 0..Y.width) {
+
+                    int y_fixed = (Yref[i+x] << 16) + 32768; // rounding
+                    int cr = Crref[i+x] - 128;
+                    int cb = Cbref[i+x] - 128;
+                    r = y_fixed + cr*cast(int)(1.40200f * 65536 + 0.5);
+                    g = y_fixed - cr*cast(int)(0.71414f * 65536 + 0.5) -
+                                  cb*cast(int)(0.34414f * 65536 + 0.5);
+                    b = y_fixed + cb*cast(int)(1.77200f * 65536 + 0.5);
+                    r >>= 16;
+                    g >>= 16;
+                    b >>= 16;
+                    RGBref[(i+x)*3..(i+x)*3+3] = [clamp(r), clamp(g), clamp(b)];
+                }
+                i += stride;
+            }
+
+            debug {
+                if (m_profiling) {
+                    m_timer.stop();
+                    writeln("JPEG Prof: EnfOfImage, convert - ", m_timer.peek().msecs);
+                }
+            }
         }
 
         scState = ScanState();
         quantTable.clear;
         huffmanTable.clear;
         components.clear;
+
 
 
     } /// eoiAction
