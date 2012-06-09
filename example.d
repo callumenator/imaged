@@ -21,7 +21,7 @@ int main()
 
     int count = 1;
     foreach(i; 0..count) {
-        pic = new Jpeg(filename);
+        pic = new Jpeg(filename, false, true);
         writeln(i);
     }
 
@@ -31,7 +31,7 @@ int main()
     //Png pic = new Png(filename);
 
 
-    //pic.RGB.resize(pic.RGB.width/2, pic.RGB.height/2);
+    pic.RGB.resize(pic.RGB.width/2, pic.RGB.height/2);
 
     /// Make a window and simpledisplay image
     sd.SimpleWindow wnd = new sd.SimpleWindow(pic.RGB.width, pic.RGB.height);

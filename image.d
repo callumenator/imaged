@@ -8,7 +8,7 @@
 +/
 module image;
 
-import std.math, std.stdio, std.traits;
+import std.math, std.stdio, std.traits, std.conv;
 
 struct Pixel {
     ushort r, g, b, a;
@@ -34,7 +34,7 @@ interface Image {
     Pixel opIndex(size_t x, size_t y);
     void setPixel(size_t x, size_t y, Pixel p);
     Image copy();
-    void resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.BILINEAR);
+    void resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST);
 
     @property uint width();
     @property uint height();
@@ -105,12 +105,74 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
         }
     }
 
-    void resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.BILINEAR) {
+    void resize(uint newWidth, uint newHeight, ResizeAlgo algo) {
 
-        if (algo == ResizeAlgo.BILINEAR) {
-            resizeBilinear(newWidth, newHeight);
+        /// Create a delegate to define the resizing algorithm
+        Pixel delegate(ImageT!(N,S) source, float x, float y) algorithmDelegate;
+
+        if (algo == ResizeAlgo.NEAREST) {
+            /// For nearest neighbour, we just inline
+        } else if (algo == ResizeAlgo.BILINEAR) {
+            algorithmDelegate = &getBilinearInterpolate;
+        } else {
+            return; /// Algorithm not implemented!!
         }
-    }
+
+        /// Make a copy of the current image, this is the 'source'
+        auto oldImg = this.copy();
+        int oldWidth = oldImg.width;
+        int oldHeight = oldImg.height;
+
+        /// Allocate a new array to hold the new image
+        m_data = new ubyte[](newWidth*newHeight*m_pixelStride);
+        m_width = newWidth;
+        m_height = newHeight;
+
+        uint i = 0; /// 1D array index
+
+        if (algo == ResizeAlgo.NEAREST) {
+            foreach (row; 0..newHeight) {
+                foreach (col; 0..newWidth) {
+                    float x = cast(float)(oldWidth-1) * (cast(float)col/cast(float)(newWidth));
+                    float y = cast(float)(oldHeight-1) * (cast(float)row/cast(float)(newHeight));
+
+                    Pixel p = oldImg[cast(int)x,cast(int)y];
+
+                    static if (N == 1 && S == 8) {
+                        m_data[i+col] = cast(ubyte)p.r;
+                    } else if (N == 3 && S == 8) {
+                        m_data[(i+col)*3..(i+col)*3+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
+                    } else if (N == 4 && S == 8) {
+                        m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
+                    }
+                } /// columns
+                i += m_width;
+            }
+        } else {
+
+
+            /// Loop through rows and columns of the new image
+            foreach (row; 0..newHeight) {
+                foreach (col; 0..newWidth) {
+                    float x = cast(float)(oldImg.width-1) * (cast(float)col/cast(float)(newWidth));
+                    float y = cast(float)(oldImg.height-1) * (cast(float)row/cast(float)(newHeight));
+
+                    Pixel p = algorithmDelegate(oldImg, x, y);
+                    static if (N == 1 && S == 8) {
+                        m_data[i+col] = cast(ubyte)p.r;
+                    } else if (N == 3 && S == 8) {
+                        m_data[(i+col)*3..(i+col)*3+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
+                    } else if (N == 4 && S == 8) {
+                        m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
+                    }
+                } /// columns
+                i += m_width;
+            }
+        }
+
+
+    } /// resize
+
 
     @property uint width() { return m_width; }
     @property uint height() { return m_height; }
@@ -134,6 +196,7 @@ private:
             return (x + y*m_width)*m_pixelStride;
         }
     }
+
 
     /**
     * Calculate a bilinear interpolate at x, y. This implementation is from:
@@ -172,6 +235,7 @@ private:
 
         return Pixel(cast(short)r, cast(short)g, cast(short)b, cast(short)a);
     }
+
 
     /**
     * Resize using a bilinear filter. This function _always_ creates a copy
