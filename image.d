@@ -111,7 +111,7 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
         Pixel delegate(ImageT!(N,S) source, float x, float y) algorithmDelegate;
 
         if (algo == ResizeAlgo.NEAREST) {
-            /// For nearest neighbour, we just inline
+            algorithmDelegate = &getNearestNeighbour;
         } else if (algo == ResizeAlgo.BILINEAR) {
             algorithmDelegate = &getBilinearInterpolate;
         } else {
@@ -130,47 +130,26 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
 
         uint i = 0; /// 1D array index
 
-        if (algo == ResizeAlgo.NEAREST) {
-            foreach (row; 0..newHeight) {
-                foreach (col; 0..newWidth) {
-                    float x = cast(float)(oldWidth-1) * (cast(float)col/cast(float)(newWidth));
-                    float y = cast(float)(oldHeight-1) * (cast(float)row/cast(float)(newHeight));
+        float x_ratio = cast(float)(oldWidth-1)/cast(float)(newWidth);
+        float y_ratio = cast(float)(oldHeight-1)/cast(float)(newHeight);
 
-                    Pixel p = oldImg[cast(int)x,cast(int)y];
+        /// Loop through rows and columns of the new image
+        foreach (row; 0..newHeight) {
+            foreach (col; 0..newWidth) {
+                float x = x_ratio * cast(float)col;
+                float y = y_ratio * cast(float)row;
 
-                    static if (N == 1 && S == 8) {
-                        m_data[i+col] = cast(ubyte)p.r;
-                    } else if (N == 3 && S == 8) {
-                        m_data[(i+col)*3..(i+col)*3+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
-                    } else if (N == 4 && S == 8) {
-                        m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
-                    }
-                } /// columns
-                i += m_width;
-            }
-        } else {
-
-
-            /// Loop through rows and columns of the new image
-            foreach (row; 0..newHeight) {
-                foreach (col; 0..newWidth) {
-                    float x = cast(float)(oldImg.width-1) * (cast(float)col/cast(float)(newWidth));
-                    float y = cast(float)(oldImg.height-1) * (cast(float)row/cast(float)(newHeight));
-
-                    Pixel p = algorithmDelegate(oldImg, x, y);
-                    static if (N == 1 && S == 8) {
-                        m_data[i+col] = cast(ubyte)p.r;
-                    } else if (N == 3 && S == 8) {
-                        m_data[(i+col)*3..(i+col)*3+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
-                    } else if (N == 4 && S == 8) {
-                        m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
-                    }
-                } /// columns
-                i += m_width;
-            }
+                Pixel p = algorithmDelegate(oldImg, x, y);
+                static if (N == 1 && S == 8) {
+                    m_data[i+col] = cast(ubyte)p.r;
+                } else if (N == 3 && S == 8) {
+                    m_data[(i+col)*3..(i+col)*3+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
+                } else if (N == 4 && S == 8) {
+                    m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
+                }
+            } /// columns
+            i += m_width;
         }
-
-
     } /// resize
 
 
@@ -197,6 +176,13 @@ private:
         }
     }
 
+
+    /// Nearest neighbour sampling (actually just the nearest neighbour to the left and down)
+    Pixel getNearestNeighbour(ImageT!(N,S) i, float x, float y) {
+        int x0 = cast(int)x;
+        int y0 = cast(int)y;
+        return i[x0, y0];
+    }
 
     /**
     * Calculate a bilinear interpolate at x, y. This implementation is from:

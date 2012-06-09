@@ -31,6 +31,90 @@ struct IMGError {
 */
 class Jpeg {
 
+    Image RGB;
+
+    /// Construct with a filename, and parse data
+    this(string filename, bool logging = false, bool profiling = false) {
+
+        m_logging = logging;
+        m_profiling = profiling;
+
+        /// Loop through the image data
+        auto data = cast(ubyte[]) read(filename);
+        foreach (bite; data) {
+            if (errorState.code == 0) {
+                parse(bite);
+            } else {
+                debug {
+                    writeln("ERROR: ", errorState.message);
+                }
+                break;
+            }
+        }
+    }
+
+
+    /// Parse a single byte
+    void parse(ubyte bite) {
+
+        segment.buffer ~= bite;
+
+        if (bite == 0xFF) {
+            markerPending = true;
+            return;
+        }
+
+        if (markerPending) {
+
+            markerPending = false;
+
+            if (bite == 0x00) { /// This is an 0xFF value
+                segment.buffer = segment.buffer[0..$-1];
+                bite = 0xFF;
+            } else if (bite >= 0xD0 && bite <= 0xD7) { /// Restart marker
+                segment.buffer = segment.buffer[0..$-2];
+                return;
+            } else if (cast(Marker)bite == Marker.EndOfImage) {
+                previousMarker = currentMarker;
+                currentMarker = cast(Marker) bite;
+                endOfImage();
+                return;
+            } else {
+                previousMarker = currentMarker;
+                currentMarker = cast(Marker) bite;
+                segment = JPGSegment();
+                return;
+            }
+        }
+
+        if (!segment.headerProcessed) {
+
+            if (segment.buffer.length == 2) {
+                segment.headerLength = (segment.buffer[0] << 8 | segment.buffer[1]);
+                return;
+            } else if (segment.buffer.length == segment.headerLength) {
+
+                debug {
+                    if (m_logging) writeln(currentMarker);
+                }
+
+                processHeader();
+                segment.headerProcessed = true;
+                segment.buffer.clear;
+                return;
+            }
+        } else {
+            if (currentMarker == Marker.StartOfScan) {
+                sosAction(bite);
+            }
+        }
+
+        totalBytesParsed ++;
+    } /// parse
+
+
+private:
+
     /// Markers courtesy of http://techstumbler.blogspot.com/2008/09/jpeg-marker-codes.html
     enum Marker
     {
@@ -121,7 +205,7 @@ class Jpeg {
 
     short x, y;
     ubyte nComponents, precision;
-    Image RGB;
+
     struct Component {
         int id, /// component id
             qtt, /// quantization table id
@@ -142,90 +226,6 @@ class Jpeg {
     ubyte[16] nCodes; /// Number of codes of each bit length (cleared after each table is defined)
     struct hashKey { ubyte index; ubyte nBits; short bitCode; } /// Keys for the Huffman hash table
     ubyte[hashKey] huffmanTable;
-
-
-    /// Construct with a filename, and parse data
-    this(string filename, bool logging = false, bool profiling = false) {
-
-        m_logging = logging;
-        m_profiling = profiling;
-
-        /// Loop through the image data
-        auto data = cast(ubyte[]) read(filename);
-        foreach (bite; data) {
-            if (errorState.code == 0) {
-                parse(bite);
-            } else {
-                debug {
-                    writeln("ERROR: ", errorState.message);
-                }
-                break;
-            }
-        }
-    }
-
-
-    /// Parse a single byte
-    void parse(ubyte bite) {
-
-        segment.buffer ~= bite;
-
-        if (bite == 0xFF) {
-            markerPending = true;
-            return;
-        }
-
-        if (markerPending) {
-
-            markerPending = false;
-
-            if (bite == 0x00) { /// This is an 0xFF value
-                segment.buffer = segment.buffer[0..$-1];
-                bite = 0xFF;
-            } else if (bite >= 0xD0 && bite <= 0xD7) { /// Restart marker
-                segment.buffer = segment.buffer[0..$-2];
-                return;
-            } else if (cast(Marker)bite == Marker.EndOfImage) {
-                previousMarker = currentMarker;
-                currentMarker = cast(Marker) bite;
-                endOfImage();
-                return;
-            } else {
-                previousMarker = currentMarker;
-                currentMarker = cast(Marker) bite;
-                segment = JPGSegment();
-                return;
-            }
-        }
-
-        if (!segment.headerProcessed) {
-
-            if (segment.buffer.length == 2) {
-                segment.headerLength = (segment.buffer[0] << 8 | segment.buffer[1]);
-                return;
-            } else if (segment.buffer.length == segment.headerLength) {
-
-                debug {
-                    if (m_logging) writeln(currentMarker);
-                }
-
-                processHeader();
-                segment.headerProcessed = true;
-                segment.buffer.clear;
-                return;
-            }
-        } else {
-            if (currentMarker == Marker.StartOfScan) {
-                sosAction(bite);
-            }
-        }
-
-        totalBytesParsed ++;
-    } /// parse
-
-
-private:
-
     /// Track the state of a scan segment
     struct ScanState {
         short cmpIdx = 0;
@@ -260,9 +260,6 @@ private:
         StopWatch m_timer;
         bool m_inScanFlag;
     }
-
-
-    void YCbCrtoRGB(){}
 
 
     /// Process a segment header
@@ -328,6 +325,9 @@ private:
                 x = cast(short) (segment.buffer[5] << 8 | segment.buffer[6]);
                 nComponents = segment.buffer[7];
                 components.length = nComponents;
+
+                /// Allocate the image
+                RGB = new ImageT!(3,8)(x, y);
 
                 int i = 8;
                 foreach(cmp; 0..nComponents) {
@@ -436,8 +436,14 @@ private:
 
                 /// Calculate the number of pixels for each component from the number of MCU's and sampling rate
                 foreach (idx, ref cmp; components) {
-                    cmp.x = scState.nxMCU * cmp.h_sample*8;
-                    cmp.y = scState.nyMCU * cmp.v_sample*8;
+
+                    ///cmp.x = scState.nxMCU * cmp.h_sample*8;
+                    ///cmp.y = scState.nyMCU * cmp.v_sample*8;
+                    ///cmp.data = new ubyte[](cmp.x*cmp.y);
+
+                    /// Just make it big enough for a single MCU
+                    cmp.x = cmp.h_sample*8;
+                    cmp.y = cmp.v_sample*8;
                     cmp.data = new ubyte[](cmp.x*cmp.y);
 
                     debug {
@@ -613,10 +619,17 @@ private:
         /// Calculate the offset into the component's pixel array
         int offset = 0;
         with (scState) {
+
+            /// Each component now only holds a single MCU
+            offset = 8*( (blockNumber % 2) + (blockNumber / 2)*components[cmpIdx].x);
+
+            /++
             offset = xMCU*(components[cmpIdx].h_sample*8) +
                      yMCU*(components[cmpIdx].x)*(components[cmpIdx].v_sample*8);
 
             offset += 8*(blockNumber % 2) + 8*(blockNumber / 2)*components[cmpIdx].x;
+            ++/
+
         }
 
         /// The recieving buffer of the IDCT is then the component's pixel array
@@ -641,6 +654,9 @@ private:
 
             if (scState.cmpIdx == nComponents) {
                 /// All components in the MCU have been parsed, so increment
+
+                endOfMCU();
+
                 scState.cmpIdx = 0;
                 scState.MCUSParsed ++;
                 scState.xMCU ++;
@@ -665,9 +681,84 @@ private:
     } /// endOfBlock
 
 
+    /// An MCU has been decoded, so resample, convert, and store
+    void endOfMCU() {
+
+        if (nComponents == 3) {
+
+            /// Resample if needed
+            if (components[1].x != scState.MCUWidth)
+                nearestNeighbourResample(1);
+            if (components[2].x != scState.MCUWidth)
+                nearestNeighbourResample(2);
+
+            /// YCbCr -> RGB conversion
+            YCrCBtoRGB();
+        }
+    }
+
+    void nearestNeighbourResample(uint cmpIndex) {
+
+        with(components[cmpIndex]) {
+
+            ubyte[] buffer = new ubyte[](scState.MCUWidth*scState.MCUHeight);
+            float x_ratio = cast(float)(x-1)/cast(float)(scState.MCUWidth);
+            float y_ratio = cast(float)(y-1)/cast(float)(scState.MCUHeight);
+
+            foreach(r; 0..scState.MCUHeight) {
+                foreach(c; 0..scState.MCUWidth) {
+                    int px = cast(int)(x_ratio * cast(float)c);
+                    int py = cast(int)(y_ratio * cast(float)r);
+                    buffer[c + scState.MCUWidth*r] = data[px + py*x];
+                } /// cols
+            } /// rows
+
+            data = buffer;
+        } /// with components[cmpIdx]
+    }
+
+
+    void YCrCBtoRGB() {
+
+        /// Convert to RGB
+        ubyte[] RGBref = RGB.pixels;
+        ubyte[] Yref = components[0].data;
+        ubyte[] Cbref = components[1].data;
+        ubyte[] Crref = components[2].data;
+        int r, g, b, i = 0, stride = scState.MCUWidth;
+
+        int ip0 = 0, ipStride = 0;
+        with(scState) {
+            ip0 = (xMCU*MCUWidth + yMCU*MCUWidth*MCUHeight*nxMCU)*3;
+            ipStride = MCUWidth*nxMCU*3;
+        }
+
+        foreach(y; 0..scState.MCUHeight) {
+            foreach(x; 0..scState.MCUWidth) {
+
+                int y_fixed = (Yref[i+x] << 16) + 32768; // rounding
+                int cr = Crref[i+x] - 128;
+                int cb = Cbref[i+x] - 128;
+                r = y_fixed + cr*cast(int)(1.40200f * 65536 + 0.5);
+                g = y_fixed - cr*cast(int)(0.71414f * 65536 + 0.5) -
+                              cb*cast(int)(0.34414f * 65536 + 0.5);
+                b = y_fixed + cb*cast(int)(1.77200f * 65536 + 0.5);
+                r >>= 16;
+                g >>= 16;
+                b >>= 16;
+
+                RGBref[ip0+x*3..ip0+x*3+3] = [clamp(r), clamp(g), clamp(b)];
+            }
+            i += stride;
+            ip0 += ipStride;
+        }
+    }
+
+
     /// End of Image
     void endOfImage() {
 
+        /++
         debug {
             if (m_profiling) {
                 m_timer.stop();
@@ -734,6 +825,8 @@ private:
                 }
             }
         }
+        ++/
+
 
         scState = ScanState();
         quantTable.clear;
