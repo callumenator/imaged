@@ -19,10 +19,11 @@ int main()
 
     sw.start();
 
-    int count = 1;
+    int count = 50;
     foreach(i; 0..count) {
+        long t = sw.peek().msecs;
         pic = new Jpeg(filename);
-        writeln(i);
+        writeln(i, ", ", sw.peek().msecs - t);
     }
 
     sw.stop();
