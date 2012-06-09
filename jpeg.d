@@ -642,9 +642,9 @@ private:
 
         if (nComponents == 3) {
 
-            Image Y = new ImageT!(1,ubyte)(components[0].x, components[0].y, components[0].data);
-            Image Cb = new ImageT!(1,ubyte)(components[1].x, components[1].y, components[1].data);
-            Image Cr = new ImageT!(1,ubyte)(components[2].x, components[2].y, components[2].data);
+            Image Y = new ImageT!(1,8)(components[0].x, components[0].y, components[0].data);
+            Image Cb = new ImageT!(1,8)(components[1].x, components[1].y, components[1].data);
+            Image Cr = new ImageT!(1,8)(components[2].x, components[2].y, components[2].data);
 
             /// Resize the chroma components if required
             if (Cb.width != Y.width || Cb.height != Y.height)
@@ -654,7 +654,7 @@ private:
                 Cr.resize(Y.width, Y.height);
 
             /// Convert to RGB
-            RGB = new ImageT!(3,ubyte)(Y.width, Y.height);
+            RGB = new ImageT!(3,8)(Y.width, Y.height);
 
             foreach(y; 0..Y.height) {
                 foreach(x; 0..Y.width) {

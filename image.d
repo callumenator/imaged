@@ -41,32 +41,29 @@ interface Image {
     @property int pixelStride();
     @property int bitsPerChannel();
     @property ref ubyte[] pixels();
-
 }
 
-class ImageT(uint N, T)
-    if (isNumeric!T && (N <= 4)) : Image
+
+
+class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
+    if ((N <= 4) && ((S == 1) || (S == 2) || (S == 4) || (S == 8) || (S == 16))) : Image
 {
 
-
-    this(uint width, uint height, int nchannels, int bitsPerChannel, bool noAlloc = false) {
+    this(uint width, uint height, bool noAlloc = false) {
         m_width = width;
         m_height = height;
-        m_channels = nchannels;
-        m_bitsPerChannel = bitsPerChannel;
-        m_pixelStride = nchannels*cast(uint)(ceil(bitsPerChannel/8.0f));
+        m_channels = N;
+        m_bitsPerChannel = S;
+        m_pixelStride = N*cast(uint)(ceil(bitsPerChannel/8.0f));
+        m_bitsPerPixel = N*S;
 
         if (!noAlloc) {
-            m_data = new ubyte[](width*height*nchannels*m_pixelStride);
+            m_data = new ubyte[](width*height*N*m_pixelStride);
         }
     }
 
-    this(uint width, uint height, bool noAlloc = false) {
-        this(width, height, N, T.sizeof, noAlloc);
-    }
-
     this(uint width, uint height, ubyte[] data, bool noCopy = false) {
-        this(width, height, N, T.sizeof, true);
+        this(width, height, true);
         if (noCopy)
             m_data = data;
         else
@@ -74,8 +71,8 @@ class ImageT(uint N, T)
     }
 
     /// Return a copy of this image, with buffer .dup'd
-    ImageT!(N, T) copy() {
-        auto copy = new ImageT!(N, T)(m_width, m_height, true);
+    ImageT!(N, S) copy() {
+        auto copy = new ImageT!(N, S)(m_width, m_height, true);
         copy.pixels = m_data.dup;
         return copy;
     }
@@ -84,11 +81,11 @@ class ImageT(uint N, T)
     Pixel opIndex(size_t x, size_t y) {
         uint i = xyToOffset(x,y);
 
-        static if (N == 1 && is(T == ubyte) ) {
+        static if (N == 1 && S == 8) {
             return Pixel(m_data[i], 0, 0, 0);
-        } else if (N == 3 && is(T == ubyte) ) {
+        } else if (N == 3 && S == 8) {
             return Pixel(m_data[i], m_data[i+1], m_data[i+2], 0);
-        } else if (N == 4 && is(T == ubyte) ) {
+        } else if (N == 4 && S == 8) {
             return Pixel(m_data[i], m_data[i+1], m_data[i+2], m_data[i+3]);
         }
     }
@@ -98,11 +95,11 @@ class ImageT(uint N, T)
     void setPixel(size_t x, size_t y, Pixel p) {
         uint i = xyToOffset(x,y);
 
-        static if (N == 1 && is(T == ubyte) ) {
+        static if (N == 1 && S == 8) {
             m_data[i] = cast(ubyte)p.r;
-        } else if (N == 3 && is(T == ubyte) ) {
+        } else if (N == 3 && S == 8) {
             m_data[i..i+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
-        } else if (N == 4 && is(T == ubyte) ) {
+        } else if (N == 4 && S == 8) {
             m_data[i..i+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
         }
     }
@@ -123,15 +120,24 @@ class ImageT(uint N, T)
 
 private:
 
+    /**
+    * This computes the 1D offset into the array for given (x,y).
+    * Note that for images with < 8 bits per channel, this gives
+    * the 1D index of the start of the _byte_.
+    */
     uint xyToOffset(uint x, uint y) {
-        return (x + y*m_width)*m_pixelStride;
+        static if (S < 8) {
+            return (x + y*m_width)/(8/S);
+        } else {
+            return (x + y*m_width)*m_pixelStride;
+        }
     }
 
     /**
-    * Calculated a bilinear interpolate at x, y. This implementation is from:
+    * Calculate a bilinear interpolate at x, y. This implementation is from:
     * http://fastcpp.blogspot.com/2011/06/bilinear-pixel-interpolation-using-sse.html
     */
-    Pixel getBilinearInterpolate(ImageT!(N,T) i, float x, float y) {
+    Pixel getBilinearInterpolate(ImageT!(N,S) i, float x, float y) {
 
         int x0 = cast(int)x;
         int y0 = cast(int)y;
@@ -189,9 +195,10 @@ private:
     } /// Resize
 
     uint m_width, m_height;
-    int m_pixelStride;
     int m_channels;
     int m_bitsPerChannel;
+    int m_bitsPerPixel;
+    int m_pixelStride; /// in bytes, minimum of 1
     ubyte[] m_data;
 }
 

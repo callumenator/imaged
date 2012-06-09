@@ -245,7 +245,7 @@ private:
 
         ubyte[] data = cast(ubyte[])(uncompress(cast(void[])zlib_stream));
 
-        RGB = new ImageT!(3,ubyte)(m_width, m_height);
+        RGB = new ImageT!(3,8)(m_width, m_height);
 
         foreach(line; 0..m_height) {
 
