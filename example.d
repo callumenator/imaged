@@ -11,18 +11,16 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-    string filename = "testimages/pier.jpeg";
+    string filename = "testimages/clouds.jpeg";
 
     Jpeg pic;
-
     StopWatch sw;
-
     sw.start();
 
-    int count = 50;
+    int count = 1;
     foreach(i; 0..count) {
         long t = sw.peek().msecs;
-        pic = new Jpeg(filename);
+        pic = new Jpeg(filename, false, true, Jpeg.Upsampling.BILINEAR);
         writeln(i, ", ", sw.peek().msecs - t);
     }
 
@@ -31,20 +29,21 @@ int main()
     writeln(sw.peek().msecs/cast(float)count);
     //Png pic = new Png(filename);
 
-
-    //pic.RGB.resize(pic.RGB.width/2, pic.RGB.height/2);
+    pic.image.resize(pic.image.width, pic.image.height);
 
     /// Make a window and simpledisplay image
-    sd.SimpleWindow wnd = new sd.SimpleWindow(pic.RGB.width, pic.RGB.height);
-    auto sd_image = new sd.Image(pic.RGB.width, pic.RGB.height);
+    sd.SimpleWindow wnd = new sd.SimpleWindow(pic.image.width, pic.image.height);
+    auto sd_image = new sd.Image(pic.image.width, pic.image.height);
 
     /// Fill the simpledisplay image with pic colors
-    foreach(x; 0..pic.RGB.width) {
-        foreach(y; 0..pic.RGB.height) {
-            Pixel pix = pic.RGB[x,y];
+
+    foreach(x; 0..pic.image.width) {
+        foreach(y; 0..pic.image.height) {
+            Pixel pix = pic.image[x,y];
             sd_image.putPixel(x, y, sd.Color(pix.r, pix.g, pix.b));
         }
     }
+
 
     /// Show the image in the window
     wnd.draw().drawImage(sd.Point(0,0), sd_image);

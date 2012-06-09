@@ -10,6 +10,15 @@ module image;
 
 import std.math, std.stdio, std.traits, std.conv;
 
+
+/// Structure to report loading/decoding errors
+struct IMGError {
+    string message;
+    int code;
+}
+
+
+/// Container for RGBA values
 struct Pixel {
     ushort r, g, b, a;
 
@@ -21,6 +30,20 @@ struct Pixel {
 	}
 }
 
+
+/// Interface for an image decoder
+abstract class Decoder {
+
+    @property Image image() {return m_image; }
+    @property IMGError errorState() {return m_errorState; }
+
+protected:
+    IMGError m_errorState;
+    Image m_image;
+}
+
+
+/// Interface for an Image
 interface Image {
 
     /// Algorithm for image resizing
@@ -45,7 +68,7 @@ interface Image {
 }
 
 
-
+/// Implementation for an image prameterized by number of channels and bits per channel
 class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
     if ((N <= 4) && ((S == 1) || (S == 2) || (S == 4) || (S == 8) || (S == 16))) : Image
 {
