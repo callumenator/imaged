@@ -174,8 +174,7 @@ private:
 
         auto oldImg = this.copy();
 
-        m_data.length = (newWidth*newHeight*m_pixelStride);
-        writeln(oldImg.pixels.length, ", ", this.pixels.length);
+        m_data = new ubyte[](newWidth*newHeight*m_pixelStride);
         m_width = newWidth;
         m_height = newHeight;
 
