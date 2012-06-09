@@ -6,10 +6,13 @@
 + Authors: Callum Anderson
 + Date: June 6, 2012
 +/
-module imaged.jpeg;
+module jpeg;
 
 import std.string, std.file, std.stdio, std.math,
        std.range, std.algorithm, std.conv;
+
+import image;
+
 
 
 /// Clamp an integer to 0-255 (ubyte)
@@ -21,277 +24,6 @@ struct IMGError {
     string message;
     int code;
 }
-
-
-/**
-* Temporary image structure allowing resizing (bilinear interpolation).
-* This structure is only temporary, as it is not flexible enough for
-* general image formats (it currently only supports 8-bit RGB.
-* It will be replaced.
-*/
-struct Image {
-
-    /// Define how the image is logically stored in the buffer
-    enum Storage {
-        UNKNOWN,
-        LEFTRIGHT_TOPBOTTOM,
-        LEFTRIGHT_BOTTOMTOP
-    }
-
-    /// Enumerate some common formats
-    enum Format {
-        UNKNOWN,
-        L8,
-        R8G8B8,
-        R8G8B8A8
-    }
-
-    /// Enumerate resize algorithms
-    enum ResizeAlgo {
-        BILINEAR,
-        BICUBIC,
-    }
-
-
-    /// Constructor with no image dimensions
-    this(Format fmt = Format.R8G8B8,
-         Storage pixelOrder = Storage.LEFTRIGHT_BOTTOMTOP) {
-
-        _format = fmt;
-        _pixelOrder = pixelOrder;
-    }
-
-
-    /// Construct with image dimensions
-    this(int width, int height,
-         Format fmt = Format.R8G8B8,
-         Storage pixelOrder = Storage.LEFTRIGHT_BOTTOMTOP,
-         bool noAlloc = false)
-    {
-
-        this(fmt, pixelOrder);
-
-        /// TODO: Check for zero dimensions
-        _width = width;
-        _height = height;
-
-        if (fmt == Format.L8) {
-            _nChannels = 1;
-        } else if (fmt == Format.R8G8B8) {
-            _nChannels = 3;
-        } else if (fmt == Format.R8G8B8A8) {
-            _nChannels = 4;
-        } else {
-            /// TODO: Fail gracefully here
-        }
-
-        if (!noAlloc) {
-            /// Allocate the pixel buffer
-            _pixels = new Pixel[](_width*_height);
-        }
-    }
-
-
-    /**
-    * Construct using a pre-allocated buffer. This will optionally
-    * make a copy of the buffer, by defualt it will just reference it.
-    */
-    this(Pixel[] pixels, int width, int height,
-         Format fmt = Format.R8G8B8,
-         Storage pixelOrder = Storage.LEFTRIGHT_BOTTOMTOP,
-         bool copyBuffer = false) {
-
-        this(width, height, fmt, pixelOrder, true);
-        if (copyBuffer) {
-            _pixels = pixels.dup;
-        } else {
-            _pixels = pixels;
-        }
-    }
-
-
-    /**
-    * Construct using a pre-allocated ubyte buffer. This will
-    * make a copy of the buffer.
-    */
-    this(ubyte[] pixels, int width, int height,
-         Format fmt = Format.R8G8B8,
-         Storage pixelOrder = Storage.LEFTRIGHT_BOTTOMTOP,
-         bool copyBuffer = false) {
-
-        this(width, height, fmt, pixelOrder, false);
-
-        if (fmt == Format.R8G8B8) {
-            foreach(row; 0..height) {
-                foreach(col; 0..width) {
-                    _pixels[col + row*width] = Pixel(pixels[col + row*width + 0],
-                                                     pixels[col + row*width + 1],
-                                                     pixels[col + row*width + 2]);
-                }
-            }
-        } else if (fmt == Format.L8) {
-            foreach(row; 0..height) {
-                foreach(col; 0..width) {
-                    _pixels[col + row*width] = Pixel(pixels[col + row*width], 0, 0);
-                }
-            }
-        }
-    }
-
-
-    /// Construct using three L8 format images for red, green and blue channels
-    this(Image red, Image green, Image blue) {
-
-        /// Ensure dimensions are equal
-        if (red.width != green.width || red.width != blue.width ||
-            red.height != green.height || red.height != blue.height ) {
-
-            throw new Exception("Image: this(Image red, Image green, Image blue) - image dimensions are different!");
-        }
-
-        /// Ensure they are all single-channel L8 images
-        if (red.format != Format.L8 ||
-            green.format != Format.L8 ||
-            blue.format != Format.L8 ) {
-
-            throw new Exception("Image: this(Image red, Image green, Image blue) - images have different formats!");
-        }
-
-        /// Ensure they are all similarly ordered
-        if (red.storage!= green.storage || red.storage!= blue.storage ) {
-
-            throw new Exception("Image: this(Image red, Image green, Image blue) - images have different storage!");
-        }
-
-        this(red.width, red.height, Format.R8G8B8, red.storage);
-
-        foreach(y; 0..height) {
-            foreach(x; 0..width) {
-                this[x,y] = Pixel(red[x,y].r, green[x,y].r, blue[x,y].r);
-            }
-        }
-
-    }
-
-
-    /// Construct using four L8 format images for red, green, blue and alpha channels
-    this(Image red, Image green, Image blue, Image alpha) {
-
-    }
-
-
-    /// Copy constructor
-    this(this) {
-        _pixels = _pixels.dup;
-    }
-
-
-    /// Resize the image
-    void resize(int newWidth, int newHeight, ResizeAlgo algo = ResizeAlgo.BILINEAR) {
-
-        switch (algo) {
-            case (ResizeAlgo.BILINEAR) : {
-                resizeBilinear(newWidth, newHeight);
-                break;
-            }
-            default: break;
-        }
-    }
-
-
-    /// Image is always indexed from the bottom left corner, regardless of storage
-    ref Pixel opIndex(size_t x, size_t y) {
-        return _pixels[x + (y*_width)];
-    }
-
-
-    @property format() { return _format; }
-    @property storage() { return _pixelOrder; }
-    @property width() { return _width; }
-    @property height() { return _height; }
-    @property const(Pixel[]) pixels() { return _pixels; }
-
-
-private:
-
-    /**
-    * Resize using a bilinear filter. This function _always_ creates a copy
-    * of the pixel data (allocates a new buffer), so if you initialized the
-    * image with a pre-allocated buffer, that buffer will not be affected.
-    * This function is not at all optimized!
-    */
-    void resizeBilinear(int newWidth, int newHeight) {
-
-        /**
-        * Calculated a pixel value from src, interpolated to x, y. This implementation is from:
-        * http://fastcpp.blogspot.com/2011/06/bilinear-pixel-interpolation-using-sse.html
-        */
-        Pixel getInterpolatedPixel(Pixel src[], float x, float y) {
-
-            int x0 = cast(int)x;
-            int y0 = cast(int)y;
-
-            /// Weighting factors
-            float fx = x - x0;
-            float fy = y - y0;
-            float fx1 = 1.0f - fx;
-            float fy1 = 1.0f - fy;
-
-            /** Get the locations in the src array of the 2x2 block surrounding (row,col)
-            * 01 ------- 11
-            * | (row,col) |
-            * 00 ------- 10
-            */
-            Pixel p1 = src[(x0 + (y0*_width))];
-            Pixel p3 = src[(x0 + ((y0+1)*_width))];
-            Pixel p2 = src[((x0+1) + (y0*_width))];
-            Pixel p4 = src[((x0+1) + ((y0+1)*_width))];
-
-            int wgt1 = cast(int)(fx1 * fy1 * 256.0f);
-            int wgt2 = cast(int)(fx  * fy1 * 256.0f);
-            int wgt3 = cast(int)(fx1 * fy  * 256.0f);
-            int wgt4 = cast(int)(fx  * fy  * 256.0f);
-
-            int r = (p1.r * wgt1 + p2.r * wgt2 + p3.r * wgt3 + p4.r * wgt4) >> 8;
-            int g = (p1.g * wgt1 + p2.g * wgt2 + p3.g * wgt3 + p4.g * wgt4) >> 8;
-            int b = (p1.b * wgt1 + p2.b * wgt2 + p3.b * wgt3 + p4.b * wgt4) >> 8;
-
-            return Pixel(cast(ubyte)r, cast(ubyte)g, cast(ubyte)b);
-        }
-
-        /// Copy the current image data
-        auto src = _pixels.dup;
-
-        /// Resize the current image
-        _pixels = new Pixel[](newWidth*newHeight);
-
-        /// Loop through rows and columns of the new image
-
-            foreach (row; 0..newHeight) {
-                foreach (col; 0..newWidth) {
-
-                    float x = cast(float)(_width-1) * (cast(float)col/cast(float)(newWidth));
-                    float y = cast(float)(_height-1) * (cast(float)row/cast(float)(newHeight));
-                    _pixels[(col + row*newWidth)] = getInterpolatedPixel(src, x, y);
-
-                } /// columns
-            }
-
-        _width = newWidth;
-        _height = newHeight;
-        src.clear;
-    } /// Bilinear resize
-
-    Storage _pixelOrder = Storage.UNKNOWN;
-    Format _format = Format.UNKNOWN;
-    byte _nChannels; /// Number if color channels (including alpha)
-    int _width; /// Image width
-    int _height; /// Image heigth
-
-    struct Pixel { ubyte r, g, b; }
-    Pixel[] _pixels; /// Raw data
-}
-
 
 /**
 * Jpeg class, which handles decoding. Great reference for baseline JPEG
@@ -909,29 +641,28 @@ private:
     void endOfImage() {
 
         if (nComponents == 3) {
-            Image Y = Image(components[0].data, components[0].x, components[0].y,
-                            Image.Format.L8, Image.Storage.LEFTRIGHT_TOPBOTTOM);
-            Image Cb = Image(components[1].data, components[1].x, components[1].y,
-                            Image.Format.L8, Image.Storage.LEFTRIGHT_TOPBOTTOM);
-            Image Cr = Image(components[2].data, components[2].x, components[2].y,
-                            Image.Format.L8, Image.Storage.LEFTRIGHT_TOPBOTTOM);
 
-            if (Cb.width != Y.width || Cb.height != Y.height) {
+            Image Y = new ImageT!(1,ubyte)(components[0].x, components[0].y, components[0].data);
+            Image Cb = new ImageT!(1,ubyte)(components[1].x, components[1].y, components[1].data);
+            Image Cr = new ImageT!(1,ubyte)(components[2].x, components[2].y, components[2].data);
+
+            /// Resize the chroma components if required
+            if (Cb.width != Y.width || Cb.height != Y.height)
                 Cb.resize(Y.width, Y.height);
-            }
 
-            if (Cr.width != Y.width || Cr.height != Y.height) {
+            if (Cr.width != Y.width || Cr.height != Y.height)
                 Cr.resize(Y.width, Y.height);
-            }
 
             /// Convert to RGB
-            RGB = Image(Y.width, Y.height, Image.Format.R8G8B8);
+            RGB = new ImageT!(3,ubyte)(Y.width, Y.height);
 
             foreach(y; 0..Y.height) {
                 foreach(x; 0..Y.width) {
-                    RGB[x,y] = Image.Pixel(clamp(cast(int)(Y[x,y].r + 1.402*(Cr[x,y].r-128))),
-                                           clamp(cast(int)(Y[x,y].r - 0.34414*(Cb[x,y].r-128) - 0.71414*(Cr[x,y].r-128) )),
-                                           clamp(cast(int)(Y[x,y].r + 1.772*(Cb[x,y].r-128))));
+                    Pixel pix = Pixel(clamp(cast(int)(Y[x,y].r + 1.402*(Cr[x,y].r-128))),
+                                      clamp(cast(int)(Y[x,y].r - 0.34414*(Cb[x,y].r-128) - 0.71414*(Cr[x,y].r-128) )),
+                                      clamp(cast(int)(Y[x,y].r + 1.772*(Cb[x,y].r-128))),
+                                      0);
+                    RGB.setPixel(x,y,pix);
                 }
             }
 

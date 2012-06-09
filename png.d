@@ -12,9 +12,10 @@ import std.string, std.file, std.stdio, std.math,
        std.range, std.algorithm, std.conv, std.zlib, std.bitmanip;
 
 import jpeg;
+import image;
 
 /**
-* Png class.
+* Png loader.
 */
 class Png {
 
@@ -244,7 +245,7 @@ private:
 
         ubyte[] data = cast(ubyte[])(uncompress(cast(void[])zlib_stream));
 
-        RGB = Image(m_width, m_height, Image.Format.R8G8B8);
+        RGB = new ImageT!(3,ubyte)(m_width, m_height);
 
         foreach(line; 0..m_height) {
 
@@ -303,7 +304,7 @@ private:
         uint x;
         foreach(col; 0..m_width) {
             x = getPixelIndex(col,y);
-            RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
         }
     }
 
@@ -311,12 +312,12 @@ private:
     void filter1(uint y, ubyte[] data) {
 
         uint x = getPixelIndex(0,y);
-        RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+        RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
 
         foreach(col; 1..m_width) {
             x = getPixelIndex(col,y);
             data[x..x+m_stride] += data[x-m_stride..x];
-            RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
         }
     }
 
@@ -327,7 +328,7 @@ private:
 
             foreach(col; 0..m_width) {
                 uint x = getPixelIndex(col,y);
-                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
             }
 
         } else {
@@ -337,7 +338,7 @@ private:
                 x = getPixelIndex(col,y);
                 b = getPixelIndex(col,y-1);
                 data[x..x+m_stride] += data[b..b+m_stride];
-                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
             }
         }
     }
@@ -349,12 +350,12 @@ private:
 
             /// Do the first col
             uint x = getPixelIndex(0,y);
-            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
 
             foreach(col; 1..m_width) {
                 x = getPixelIndex(col,y);
                 data[x..x+m_stride] += cast(ubyte[])(data[x-m_stride..x] / 2);
-                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
             }
 
         } else {
@@ -363,13 +364,13 @@ private:
             uint x = getPixelIndex(0,y);
             uint b = getPixelIndex(0,y-1);
             data[x..x+m_stride] += cast(ubyte[]) (data[b..b+m_stride] / 2);
-            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
 
             foreach(col; 1..m_width) {
                 x = getPixelIndex(col,y);
                 b = getPixelIndex(col,y-1);
                 data[x..x+m_stride] += cast(ubyte[])((data[x-m_stride..x] + data[b..b+m_stride])/2);
-                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
             }
         }
     }
@@ -398,14 +399,14 @@ private:
 
             /// Do the first col
             uint x = getPixelIndex(0,y);
-            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
 
             foreach(col; 1..m_width) {
                 x = getPixelIndex(col,y);
                 data[x] += paeth(data[x-m_stride], 0, 0);
                 data[x + 1] += paeth(data[x+1-m_stride], 0, 0);
                 data[x + 2] += paeth(data[x+2-m_stride], 0, 0);
-                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
             }
 
         } else {
@@ -416,7 +417,7 @@ private:
             data[x] += paeth(0, data[b], 0);
             data[x + 1] += paeth(0, data[b + 1], 0);
             data[x + 2] += paeth(0, data[b + 2], 0);
-            RGB[0, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
 
             foreach(col; 1..m_width) {
                 x = getPixelIndex(col,y);
@@ -424,7 +425,7 @@ private:
                 data[x] += paeth(data[x-m_stride], data[b], data[b-m_stride]);
                 data[x + 1] += paeth(data[x+1-m_stride], data[b+1], data[b+1-m_stride]);
                 data[x + 2] += paeth(data[x+2-m_stride], data[b+2], data[b+2-m_stride]);
-                RGB[col, y] = Image.Pixel(data[x], data[x + 1], data[x + 2]);
+                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
             }
         }
 

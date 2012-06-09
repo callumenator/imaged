@@ -3,6 +3,7 @@ module example;
 
 import std.stdio;
 
+import image;
 import jpeg;
 import png;
 import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
@@ -10,9 +11,9 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-    string filename = "testimages/earth.png";
-    //Jpeg pic = new Jpeg(filename);
-    Png pic = new Png(filename);
+    string filename = "testimages/lion.jpg";
+    Jpeg pic = new Jpeg(filename);
+    //Png pic = new Png(filename);
 
 
     //pic.RGB.resize(pic.RGB.width/2, pic.RGB.height/2);
@@ -24,7 +25,7 @@ int main()
     /// Fill the simpledisplay image with pic colors
     foreach(x; 0..pic.RGB.width) {
         foreach(y; 0..pic.RGB.height) {
-            jpeg.Image.Pixel pix = pic.RGB[x,y];
+            Pixel pix = pic.RGB[x,y];
             sd_image.putPixel(x, y, sd.Color(pix.r, pix.g, pix.b));
         }
     }
