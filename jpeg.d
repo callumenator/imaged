@@ -28,7 +28,8 @@ ubyte clamp(const int x) {
 class Jpeg : Decoder {
 
 
-    /** Algorithms for upsampling the chroma components,
+    /**
+    * Algorithms for upsampling the chroma components,
     * defaults to NEAREST.
     */
     enum Upsampling {
@@ -274,6 +275,7 @@ private:
         bool m_inScanFlag;
     }
 
+    short x, y;
 
     /// Process a segment header
     void processHeader() {
@@ -334,13 +336,10 @@ private:
             case(Marker.HuffBaselineDCT): {
 
                 ubyte precision = segment.buffer[2];
-                short y = cast(short) (segment.buffer[3] << 8 | segment.buffer[4]);
-                short x = cast(short) (segment.buffer[5] << 8 | segment.buffer[6]);
+                y = cast(short) (segment.buffer[3] << 8 | segment.buffer[4]);
+                x = cast(short) (segment.buffer[5] << 8 | segment.buffer[6]);
                 nComponents = segment.buffer[7];
                 components.length = nComponents;
-
-                /// Allocate the image
-                m_image = new ImageT!(3,8)(x, y);
 
                 int i = 8;
                 foreach(cmp; 0..nComponents) {
@@ -440,12 +439,17 @@ private:
                 scState.MCUHeight = v_samp_max*8;
 
                 /// Number of MCU's in the whole transformed image (the actual image could be smaller)
-                scState.nxMCU = m_image.width / scState.MCUWidth;
-                scState.nyMCU = m_image.height / scState.MCUHeight;
-                if (m_image.width % scState.MCUWidth > 0)
+                scState.nxMCU = x / scState.MCUWidth;
+                scState.nyMCU = y / scState.MCUHeight;
+                if (x % scState.MCUWidth > 0)
                     scState.nxMCU ++;
-                if (m_image.height % scState.MCUHeight > 0)
+                if (y % scState.MCUHeight > 0)
                     scState.nyMCU ++;
+
+                /// Allocate the image
+                m_image = new ImageT!(3,8)(scState.nxMCU*scState.MCUWidth,
+                                           scState.nyMCU*scState.MCUHeight);
+
 
                 /// Calculate the number of pixels for each component from the number of MCU's and sampling rate
                 foreach (idx, ref cmp; components) {
@@ -459,7 +463,6 @@ private:
                        if (m_logging) writefln("Component %s, x:%s, y:%s", idx, cmp.x, cmp.y);
                     }
                 }
-
                 break;
             }
 
@@ -802,10 +805,19 @@ private:
 
     /// End of Image
     void endOfImage() {
+
+        /**
+        * Crop the image back to its real size (JPEG encoders can increase
+        * increase the dimensions to make them divisible by 8 for the DCT
+        */
+        image.resize(x, y, Image.ResizeAlgo.CROP);
+
+        /// Clear some fields
         scState = ScanState();
         quantTable.clear;
         huffmanTable.clear;
         components.clear;
+
     } /// eoiAction
 
 

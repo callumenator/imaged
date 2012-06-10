@@ -17,7 +17,7 @@ import image;
 /**
 * Png loader.
 */
-class Png {
+class Png : Decoder {
 
     enum Chunk {
         NONE,
@@ -29,6 +29,8 @@ class Png {
 
     /// Construct with a filename, and parse data
     this(string filename) {
+
+        zliber = new UnCompress();
 
         /// Loop through the image data
         auto data = cast(ubyte[]) read(filename);
@@ -49,27 +51,29 @@ class Png {
 
         segment.buffer ~= bite;
 
-        if (!haveHeader && (segment.buffer.length == 8)) {
+        if (!m_haveHeader && (segment.buffer.length == 8)) {
             if (segment.buffer[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
                 /// File has correct header
                 segment.buffer.clear;
-                pendingChunk = true;
-                haveHeader = true;
+                m_pendingChunk = true;
+                m_haveHeader = true;
             } else {
                 /// Not a valid png
-                errorState.code = 1;
-                errorState.message = "Header does not match PNG type!";
+                m_errorState.code = 1;
+                m_errorState.message = "Header does not match PNG type!";
                 writefln("%(%02x %)", segment.buffer);
                 return;
             }
         }
 
-        if (pendingChunk && (segment.buffer.length == 8)) {
+        if (m_pendingChunk && (segment.buffer.length == 8)) {
 
-            pendingChunk = false;
+            m_pendingChunk = false;
 
             segment.chunkLength = fourBytesToInt(segment.buffer[0..4]);
             char[] type = cast(char[])segment.buffer[4..8];
+
+            writeln(type);
 
             if (type == "IHDR") {
                 segment.chunkType = Chunk.IHDR;
@@ -84,31 +88,26 @@ class Png {
             }
         }
 
-        if (haveHeader && !pendingChunk && (segment.buffer.length == segment.chunkLength + 8 + 4)) {
+        if (m_haveHeader && !m_pendingChunk && (segment.buffer.length == segment.chunkLength + 8 + 4)) {
 
             processChunk();
 
-            /// If this chunk is not an IDAT, and the previous one was, then decode the stored stream
-            if (segment.chunkType != Chunk.IDAT && previousChunk == Chunk.IDAT) {
-                uncompressStream();
-            }
-
-            previousChunk = segment.chunkType;
-            pendingChunk = true;
+            m_previousChunk = segment.chunkType;
+            m_pendingChunk = true;
             segment = PNGSegment();
         }
 
+        m_totalBytesParsed ++;
+    } /// parse
 
-
-    }
-
-    Image RGB;
 
 private:
 
-    bool haveHeader = false;
-    Chunk previousChunk = Chunk.NONE;
-    bool pendingChunk = false;
+    bool m_haveHeader = false;
+    Chunk m_previousChunk = Chunk.NONE;
+    bool m_pendingChunk = false;
+    uint m_totalBytesParsed;
+    ubyte interlacePass = 0;
 
     struct PNGSegment {
         Chunk chunkType = Chunk.NONE;
@@ -116,9 +115,10 @@ private:
         ubyte[] buffer;
     }
     PNGSegment segment;
-    IMGError errorState;
 
-    ubyte[] zlib_stream;
+    ubyte[] scanLine1, scanLine2;
+    int m_currentScanLine;
+    UnCompress zliber;
     uint checkSum;
 
     int m_width, m_height;
@@ -188,14 +188,19 @@ private:
 
                 switch (m_colorType) {
                     case(0): m_nChannels = 1; break; /// greyscale
-                    case(2): m_nChannels = 3; break; /// rgb
+                    case(2): m_nChannels = 3; m_image = new ImageT!(3,8)(m_width, m_height); break; /// rgb
                     case(3): m_nChannels = 1; break; /// palette
                     case(4): m_nChannels = 2; break; /// greyscale + alpha
-                    case(6): m_nChannels = 4; break; /// rgba
+                    case(6): m_nChannels = 4; m_image = new ImageT!(4,8)(m_width, m_height); break; /// rgba
                     default: break;
                 }
 
+
+
                 m_stride = m_nChannels*(m_bitDepth/8);
+                m_bytesPerScanline = 1 + m_width*m_stride;
+
+                scanLine1 = new ubyte[](m_bytesPerScanline);
 
                 debug {
                     writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
@@ -215,10 +220,11 @@ private:
                     return;
                 }
 
-                zlib_stream ~= segment.buffer[8..$-4];
+                uncompressStream(segment.buffer[8..$-4]);
                 break;
             }
 
+            /// Palette chunk
             case(Chunk.PLTE): {
 
                 if (!csum_passed) {
@@ -230,6 +236,12 @@ private:
                 break;
             }
 
+            /// Image end
+            case(Chunk.IEND): {
+
+                uncompressStream(scanLine2, true);
+                break;
+            }
 
             default: {
                 debug {
@@ -241,142 +253,124 @@ private:
     } /// processChunk
 
 
-    void uncompressStream() {
+    /// Uncompress the stream, apply filters, and store image
+    void uncompressStream(ubyte[] stream, bool finalize = false) {
 
-        ubyte[] data = cast(ubyte[])(uncompress(cast(void[])zlib_stream));
+        ubyte[] data;
+        if (!finalize)
+            data = cast(ubyte[])(zliber.uncompress(cast(void[])stream));
+        else
+            data = cast(ubyte[])(zliber.flush());
 
-        RGB = new ImageT!(3,8)(m_width, m_height);
+        writeln(data.length, ", ", stream.length);
+        int taken = 0, takeLen = 0;
+        auto RGBref = m_image.pixels;
 
-        foreach(line; 0..m_height) {
+        while (taken < data.length) {
 
-            /// Filters can change between scan lines
-            ubyte filter = data[getPixelIndex(0, line)-1];
-
-            switch(filter) {
-                case(0): { /// no filtering, excellent
-                    filter0(line, data);
-                    break;
-                }
-
-                case(1): { /// difference filter, using previous pixel on same scanline
-                    filter1(line, data);
-                    break;
-                }
-
-                case(2): { /// difference filter, using pixel on scanline above, same column
-                    filter2(line, data);
-                    break;
-                }
-
-                case(3): { /// average filter, average of pixel above and pixel to left
-                    filter3(line, data);
-                    break;
-                }
-
-                case(4): { /// Paeth filter
-                    filter4(line, data);
-                    break;
-                }
-
-                default: {
-                    writeln("PNG: Unhandled filter (" ~ to!string(filter) ~ ") on scan line "
-                            ~ to!string(line));
-                    break;
-                }
+            /// Put data into the lower scanline first
+            takeLen = m_bytesPerScanline - scanLine2.length;
+            if (takeLen > 0 && taken + takeLen <= data.length) {
+                scanLine2 ~= data[taken..taken+takeLen];
+                taken += takeLen;
+            } else if (takeLen > 0) {
+                scanLine2 ~= data[taken..$];
+                taken += data.length - taken;
             }
-        }
+
+            //writeln(taken, ", ", scanLine2.length);
+
+            if (scanLine2.length == m_bytesPerScanline) {
+
+                /// Have a full scanline, so filter it...
+                filter();
+
+                /// Put it into the image
+                int idx = m_currentScanLine*m_image.width*m_stride;
+                RGBref[idx..idx+m_bytesPerScanline-1] = scanLine2[1..$];
+
+                /// Increment scanline counter
+                m_currentScanLine ++;
+                //writeln(m_currentScanLine);
+
+                /// Swap the scanlines
+                auto tmp = scanLine1;
+                scanLine1 = scanLine2;
+                scanLine2 = scanLine1;
+                scanLine2.clear;
+            }
+
+        } /// while
+
     } /// uncompressStream
 
 
-    /// Return the 1D offset for a given pixel at x, y
-    uint getPixelIndex(int x, int y) {
+    /// Apply filters to a scanline
+    void filter() {
 
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
+        int filterType = scanLine2[0];
 
-        /// Remeber that each 'row'/scanline starts with 1 byte, for the filter type
-        return x*m_nChannels*(m_bitDepth/8) + y*m_width*m_nChannels*(m_bitDepth/8) + (y+1);
+        switch(filterType) {
+            case(0): { /// no filtering, excellent
+                break;
+            }
+            case(1): { /// difference filter, using previous pixel on same scanline
+                filter1();
+                break;
+            }
+            case(2): { /// difference filter, using pixel on scanline above, same column
+                filter2();
+                break;
+            }
+            case(3): { /// average filter, average of pixel above and pixel to left
+                filter3();
+                break;
+            }
+            case(4): { /// Paeth filter
+                filter4();
+                break;
+            }
+            default: {
+                writeln("PNG: Unhandled filter (" ~ to!string(filterType) ~ ") on scan line "
+                        ~ to!string(m_currentScanLine));
+                break;
+            }
+        } /// switch filterType
     }
 
-
-    /// Apply filter 0 to scanline (no filter)
-    void filter0(uint y, ubyte[] data) {
-        uint x;
-        foreach(col; 0..m_width) {
-            x = getPixelIndex(col,y);
-            RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-        }
-    }
 
     /// Apply filter 1 to scanline (difference filter)
-    void filter1(uint y, ubyte[] data) {
+    void filter1() {
+        //scanLine2[1+m_stride..$] += scanLine2[1..$-m_stride];
 
-        uint x = getPixelIndex(0,y);
-        RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-
-        foreach(col; 1..m_width) {
-            x = getPixelIndex(col,y);
-            data[x..x+m_stride] += data[x-m_stride..x];
-            RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
+        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
+            scanLine2[i..i+m_stride] += ( scanLine2[i-m_stride..i] );
         }
     }
+
 
     /// Apply filter 2 to scanline (difference filter, using scanline above)
-    void filter2(uint y, ubyte[] data) {
-
-        if (y == 0) {
-
-            foreach(col; 0..m_width) {
-                uint x = getPixelIndex(col,y);
-                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-            }
-
-        } else {
-
-            uint x, b = 0;
-            foreach(col; 0..m_width) {
-                x = getPixelIndex(col,y);
-                b = getPixelIndex(col,y-1);
-                data[x..x+m_stride] += data[b..b+m_stride];
-                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-            }
-        }
+    void filter2() {
+        scanLine2[1..$] += scanLine1[1..$];
     }
+
 
     /// Apply filter 3 to scanline (average filter)
-    void filter3(uint y, ubyte[] data) {
+    void filter3() {
 
-        if (y == 0) {
+        scanLine2[1..1+m_stride] += cast(ubyte[])(scanLine1[1..1+m_stride] / 2);
 
-            /// Do the first col
-            uint x = getPixelIndex(0,y);
-            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-
-            foreach(col; 1..m_width) {
-                x = getPixelIndex(col,y);
-                data[x..x+m_stride] += cast(ubyte[])(data[x-m_stride..x] / 2);
-                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-            }
-
-        } else {
-
-            /// Do the first col
-            uint x = getPixelIndex(0,y);
-            uint b = getPixelIndex(0,y-1);
-            data[x..x+m_stride] += cast(ubyte[]) (data[b..b+m_stride] / 2);
-            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-
-            foreach(col; 1..m_width) {
-                x = getPixelIndex(col,y);
-                b = getPixelIndex(col,y-1);
-                data[x..x+m_stride] += cast(ubyte[])((data[x-m_stride..x] + data[b..b+m_stride])/2);
-                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-            }
+        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
+            scanLine2[i..i+m_stride] += cast(ubyte[])(( scanLine2[i-m_stride..i] +
+                                                        scanLine1[i..i+m_stride] ) / 2);
         }
+
+
     }
 
+
     /// Apply filter 4 to scanline (Paeth filter)
-    void filter4(uint y, ubyte[] data) {
+    void filter4() {
 
         int paeth(ubyte a, ubyte b, ubyte c) {
             int p = (a + b - c);
@@ -395,44 +389,18 @@ private:
             return pred;
         }
 
-        if (y == 0) {
 
-            /// Do the first col
-            uint x = getPixelIndex(0,y);
-            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
+        foreach(i; 0..m_stride) {
+            scanLine2[i] += paeth(0, scanLine1[i], 0);
+        }
 
-            foreach(col; 1..m_width) {
-                x = getPixelIndex(col,y);
-                data[x] += paeth(data[x-m_stride], 0, 0);
-                data[x + 1] += paeth(data[x+1-m_stride], 0, 0);
-                data[x + 2] += paeth(data[x+2-m_stride], 0, 0);
-                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-            }
-
-        } else {
-
-            /// Do the first col
-            uint x = getPixelIndex(0,y);
-            uint b = getPixelIndex(0,y-1);
-            data[x] += paeth(0, data[b], 0);
-            data[x + 1] += paeth(0, data[b + 1], 0);
-            data[x + 2] += paeth(0, data[b + 2], 0);
-            RGB.setPixel(0, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
-
-            foreach(col; 1..m_width) {
-                x = getPixelIndex(col,y);
-                b = getPixelIndex(col,y-1);
-                data[x] += paeth(data[x-m_stride], data[b], data[b-m_stride]);
-                data[x + 1] += paeth(data[x+1-m_stride], data[b+1], data[b+1-m_stride]);
-                data[x + 2] += paeth(data[x+2-m_stride], data[b+2], data[b+2-m_stride]);
-                RGB.setPixel(col, y, Pixel(data[x], data[x + 1], data[x + 2], 0));
+        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
+            foreach(j; 0..m_stride) {
+                scanLine2[i+j] += paeth(scanLine2[i+j-m_stride], scanLine1[i+j], scanLine1[i+j-m_stride]);
             }
         }
 
-
-
-
-    }
+    } /// filter4
 
 
 }

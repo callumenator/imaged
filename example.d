@@ -11,25 +11,10 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-    string filename = "testimages/clouds.jpeg";
+    string filename = "testimages/earth.png";
+    Png pic = new Png(filename);
 
-    Jpeg pic;
-    StopWatch sw;
-    sw.start();
-
-    int count = 1;
-    foreach(i; 0..count) {
-        long t = sw.peek().msecs;
-        pic = new Jpeg(filename, false, true, Jpeg.Upsampling.BILINEAR);
-        writeln(i, ", ", sw.peek().msecs - t);
-    }
-
-    sw.stop();
-    writeln();
-    writeln(sw.peek().msecs/cast(float)count);
-    //Png pic = new Png(filename);
-
-    pic.image.resize(pic.image.width, pic.image.height);
+    //pic.image.resize(pic.image.width/2, pic.image.height/2);
 
     /// Make a window and simpledisplay image
     sd.SimpleWindow wnd = new sd.SimpleWindow(pic.image.width, pic.image.height);

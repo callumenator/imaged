@@ -57,7 +57,7 @@ interface Image {
     Pixel opIndex(size_t x, size_t y);
     void setPixel(size_t x, size_t y, Pixel p);
     Image copy();
-    void resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST);
+    bool resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST);
 
     @property uint width();
     @property uint height();
@@ -128,17 +128,27 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
         }
     }
 
-    void resize(uint newWidth, uint newHeight, ResizeAlgo algo) {
+
+    /*
+    * Resize an image to the given dimensions, using the given algorithm.
+    * Returns: true on successful resize, else false.
+    */
+    bool resize(uint newWidth, uint newHeight, ResizeAlgo algo) {
+
+        if (newWidth == m_width && newHeight == m_height)
+            return false;
 
         /// Create a delegate to define the resizing algorithm
-        Pixel delegate(ImageT!(N,S) source, float x, float y) algorithmDelegate;
+        Pixel delegate(ImageT!(N,S), float, float, uint, uint) algorithmDelegate;
 
         if (algo == ResizeAlgo.NEAREST) {
             algorithmDelegate = &getNearestNeighbour;
         } else if (algo == ResizeAlgo.BILINEAR) {
             algorithmDelegate = &getBilinearInterpolate;
+        } else if (algo == ResizeAlgo.CROP) {
+            algorithmDelegate = &getCropped;
         } else {
-            return; /// Algorithm not implemented!!
+            return false; /// Algorithm not implemented!!
         }
 
         /// Make a copy of the current image, this is the 'source'
@@ -152,7 +162,6 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
         m_height = newHeight;
 
         uint i = 0; /// 1D array index
-
         float x_ratio = cast(float)(oldWidth-1)/cast(float)(newWidth);
         float y_ratio = cast(float)(oldHeight-1)/cast(float)(newHeight);
 
@@ -162,7 +171,10 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
                 float x = x_ratio * cast(float)col;
                 float y = y_ratio * cast(float)row;
 
-                Pixel p = algorithmDelegate(oldImg, x, y);
+                /// Use the selected algorithm to get the pixel value
+                Pixel p = algorithmDelegate(oldImg, x, y, col, row);
+
+                /// Store the new pixel
                 static if (N == 1 && S == 8) {
                     m_data[i+col] = cast(ubyte)p.r;
                 } else if (N == 3 && S == 8) {
@@ -173,15 +185,18 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
             } /// columns
             i += m_width;
         }
+
+        return true; /// successfully resized
     } /// resize
 
 
-    @property uint width() { return m_width; }
-    @property uint height() { return m_height; }
-    @property int pixelStride() { return m_pixelStride; }
-    @property int bitsPerChannel() { return m_bitsPerChannel; }
-    @property ref ubyte[] pixels() { return m_data; }
-    @property ubyte* pixelsPtr() { return m_data.ptr; }
+    /// Getters
+    @property uint width() { return m_width; } /// ditto
+    @property uint height() { return m_height; } /// ditto
+    @property int pixelStride() { return m_pixelStride; } /// ditto
+    @property int bitsPerChannel() { return m_bitsPerChannel; } /// ditto
+    @property ref ubyte[] pixels() { return m_data; } /// ditto
+    @property ubyte* pixelsPtr() { return m_data.ptr; } /// ditto
 
 
 private:
@@ -200,8 +215,17 @@ private:
     }
 
 
+    /// Cropping algorithm - If (x,y) is in the original, return that pixel, else return 0,0,0,0
+    Pixel getCropped(ImageT!(N,S) i, float x, float y, uint col, uint row) {
+        if (col < i.width && row < i.height)
+            return i[col, row];
+        else
+            return Pixel(0,0,0,0);
+    }
+
+
     /// Nearest neighbour sampling (actually just the nearest neighbour to the left and down)
-    Pixel getNearestNeighbour(ImageT!(N,S) i, float x, float y) {
+    Pixel getNearestNeighbour(ImageT!(N,S) i, float x, float y, uint col, uint row) {
         int x0 = cast(int)x;
         int y0 = cast(int)y;
         return i[x0, y0];
@@ -211,7 +235,7 @@ private:
     * Calculate a bilinear interpolate at x, y. This implementation is from:
     * http://fastcpp.blogspot.com/2011/06/bilinear-pixel-interpolation-using-sse.html
     */
-    Pixel getBilinearInterpolate(ImageT!(N,S) i, float x, float y) {
+    Pixel getBilinearInterpolate(ImageT!(N,S) i, float x, float y, uint col, uint row) {
 
         int x0 = cast(int)x;
         int y0 = cast(int)y;
@@ -244,41 +268,6 @@ private:
 
         return Pixel(cast(short)r, cast(short)g, cast(short)b, cast(short)a);
     }
-
-
-    /**
-    * Resize using a bilinear filter. This function _always_ creates a copy
-    * of the pixel data (allocates a new buffer), so if you initialized the
-    * image with a pre-allocated buffer, that buffer will not be affected.
-    */
-    void resizeBilinear(uint newWidth, uint newHeight) {
-
-        auto oldImg = this.copy();
-
-        m_data = new ubyte[](newWidth*newHeight*m_pixelStride);
-        m_width = newWidth;
-        m_height = newHeight;
-
-        uint i = 0;
-
-        /// Loop through rows and columns of the new image
-        foreach (row; 0..newHeight) {
-            foreach (col; 0..newWidth) {
-                float x = cast(float)(oldImg.width-1) * (cast(float)col/cast(float)(newWidth));
-                float y = cast(float)(oldImg.height-1) * (cast(float)row/cast(float)(newHeight));
-
-                Pixel p = getBilinearInterpolate(oldImg, x, y);
-                static if (N == 1 && S == 8) {
-                    m_data[i+col] = cast(ubyte)p.r;
-                } else if (N == 3 && S == 8) {
-                    m_data[(i+col)*3..(i+col)*3+3] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b];
-                } else if (N == 4 && S == 8) {
-                    m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
-                }
-            } /// columns
-            i += m_width;
-        }
-    } /// Resize
 
     uint m_width, m_height;
     int m_channels;
