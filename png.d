@@ -11,8 +11,8 @@ module png;
 import std.string, std.file, std.stdio, std.math,
        std.range, std.algorithm, std.conv, std.zlib, std.bitmanip;
 
-import jpeg;
 import image;
+
 
 /**
 * Png loader.
@@ -107,7 +107,22 @@ private:
     Chunk m_previousChunk = Chunk.NONE;
     bool m_pendingChunk = false;
     uint m_totalBytesParsed;
-    ubyte interlacePass = 0;
+    ubyte m_interlacePass = 0;
+
+    int[7] m_pixPerLine;
+    int[7] m_scanLines;
+
+    struct InterLace {
+        int imageRow;
+        int[7] start_row =      [ 0, 0, 4, 0, 2, 0, 1 ];
+        int[7] start_col =      [ 0, 4, 0, 2, 0, 1, 0 ];
+        int[7] row_increment =  [ 8, 8, 8, 4, 4, 2, 2 ];
+        int[7] col_increment =  [ 8, 8, 4, 4, 2, 2, 1 ];
+        int[7] block_height =   [ 8, 8, 4, 4, 2, 2, 1 ];
+        int[7] block_width =    [ 8, 4, 4, 2, 2, 1, 1 ];
+    }
+    InterLace m_ilace;
+
 
     struct PNGSegment {
         Chunk chunkType = Chunk.NONE;
@@ -130,6 +145,8 @@ private:
         m_bytesPerScanline,
         m_nChannels,
         m_stride;
+
+
 
     /**
     * Color types are:
@@ -195,12 +212,49 @@ private:
                     default: break;
                 }
 
-
-
                 m_stride = m_nChannels*(m_bitDepth/8);
                 m_bytesPerScanline = 1 + m_width*m_stride;
 
                 scanLine1 = new ubyte[](m_bytesPerScanline);
+
+                /// Calculate pixels per line and scanlines per pass for interlacing
+                foreach(i; 0..m_width) {
+                    if (i % 8 == 0) m_pixPerLine[0] ++;
+                    if (i % 8 == 4) m_pixPerLine[1] ++;
+                    if (i % 8 == 0 ||
+                        i % 8 == 4) m_pixPerLine[2] ++;
+                    if (i % 8 == 2 ||
+                        i % 8 == 6) m_pixPerLine[3] ++;
+                    if (i % 8 == 0 ||
+                        i % 8 == 2 ||
+                        i % 8 == 4 ||
+                        i % 8 == 6 ) m_pixPerLine[4] ++;
+                    if (i % 8 == 1 ||
+                        i % 8 == 3 ||
+                        i % 8 == 5 ||
+                        i % 8 == 7 ) m_pixPerLine[5] ++;
+                }
+                m_pixPerLine[6] = m_width;
+
+                foreach(i; 0..m_height) {
+                    if (i % 8 == 0) m_scanLines[0] ++;
+                    if (i % 8 == 0) m_scanLines[1] ++;
+                    if (i % 8 == 4) m_scanLines[2] ++;
+                    if (i % 8 == 0 ||
+                        i % 8 == 4) m_scanLines[3] ++;
+                    if (i % 8 == 2 ||
+                        i % 8 == 6 ) m_scanLines[4] ++;
+                    if (i % 8 == 0 ||
+                        i % 8 == 2 ||
+                        i % 8 == 4 ||
+                        i % 8 == 6 ) m_scanLines[5] ++;
+                    if (i % 8 == 1 ||
+                        i % 8 == 3 ||
+                        i % 8 == 5 ||
+                        i % 8 == 7 ) m_scanLines[6] ++;
+                }
+
+
 
                 debug {
                     writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
@@ -257,19 +311,30 @@ private:
     void uncompressStream(ubyte[] stream, bool finalize = false) {
 
         ubyte[] data;
-        if (!finalize)
+        if (!finalize) {
             data = cast(ubyte[])(zliber.uncompress(cast(void[])stream));
-        else
+        } else {
             data = cast(ubyte[])(zliber.flush());
+        }
 
-        writeln(data.length, ", ", stream.length);
+        /// Number of bytes in a scanline depends on the interlace pass
+        int bytesPerLine = 0;
+        int nscanLines = 0;
+        if (m_interlace == 1) {
+             bytesPerLine = m_pixPerLine[m_interlacePass]*m_stride + 1;
+             nscanLines = m_scanLines[m_interlacePass];
+        } else {
+            bytesPerLine = m_bytesPerScanline;
+            nscanLines = m_height;
+        }
+
         int taken = 0, takeLen = 0;
         auto RGBref = m_image.pixels;
 
         while (taken < data.length) {
 
             /// Put data into the lower scanline first
-            takeLen = m_bytesPerScanline - scanLine2.length;
+            takeLen = bytesPerLine - scanLine2.length;
             if (takeLen > 0 && taken + takeLen <= data.length) {
                 scanLine2 ~= data[taken..taken+takeLen];
                 taken += takeLen;
@@ -278,26 +343,71 @@ private:
                 taken += data.length - taken;
             }
 
-            //writeln(taken, ", ", scanLine2.length);
-
-            if (scanLine2.length == m_bytesPerScanline) {
+            if (scanLine2.length == bytesPerLine) {
 
                 /// Have a full scanline, so filter it...
                 filter();
 
                 /// Put it into the image
-                int idx = m_currentScanLine*m_image.width*m_stride;
-                RGBref[idx..idx+m_bytesPerScanline-1] = scanLine2[1..$];
+                if (m_interlace == 0) {
+                    int idx = m_currentScanLine*m_image.width*m_stride;
+                    RGBref[idx..idx+m_bytesPerScanline-1] = scanLine2[1..$];
+                } else {
+
+                    with(m_ilace) {
+
+                        int pass = m_interlacePass;
+                        int col = start_col[pass];
+                        int scanline_idx = 1;
+
+                        while (col < m_width) {
+
+                            int idx = (col + imageRow*m_width)*m_stride;
+
+                            foreach(py; 0..1){//min(block_height[pass], m_height - imageRow)) {
+                            foreach(px; 0..1){//min(block_width[pass], m_width - col)) {
+                                int offset = idx + (px * py*m_width)*m_stride;
+                                //writeln(offset % m_width, ", ", offset / m_width);
+                                //RGBref[offset..offset+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
+                            }
+                            }
+
+                            //writeln(scanline_idx, ", ", col, ", ", scanLine2.length);
+
+                            RGBref[idx..idx+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
+                            scanline_idx += m_stride;
+                            col = col + col_increment[pass];
+                        }
+                    }
+
+                }
 
                 /// Increment scanline counter
                 m_currentScanLine ++;
-                //writeln(m_currentScanLine);
 
                 /// Swap the scanlines
                 auto tmp = scanLine1;
                 scanLine1 = scanLine2;
                 scanLine2 = scanLine1;
                 scanLine2.clear;
+
+                if (m_interlace == 1)
+                    m_ilace.imageRow += m_ilace.row_increment[m_interlacePass];
+
+                if (m_interlace == 1 && m_currentScanLine == nscanLines) {
+                    m_currentScanLine = 0;
+                    m_interlacePass ++;
+
+                    if (m_interlacePass == 7) {
+                        m_interlacePass = 0;
+                        break;
+                    } else {
+                        scanLine1 = new ubyte[](m_bytesPerScanline);
+                        bytesPerLine = m_pixPerLine[m_interlacePass]*m_stride + 1;
+                        nscanLines = m_scanLines[m_interlacePass];
+                        m_ilace.imageRow = m_ilace.start_row[m_interlacePass];
+                    }
+                }
             }
 
         } /// while

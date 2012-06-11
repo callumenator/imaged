@@ -11,10 +11,11 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-    string filename = "testimages/clouds.jpeg";
+
+    string filename = "testimages/street.png";
     Image pic = load(filename);
 
-    pic.resize(pic.width/2, pic.height/2);
+    //pic.resize(pic.width/2, pic.height/2);
 
     /// Make a window and simpledisplay image
     sd.SimpleWindow wnd = new sd.SimpleWindow(pic.width, pic.height);
