@@ -8,7 +8,29 @@
 +/
 module image;
 
-import std.math, std.stdio, std.traits, std.conv;
+import std.math, std.stdio, std.traits, std.conv, std.path;
+
+import jpeg;
+import png;
+
+
+Image load(string filename) {
+
+    Decoder dcd = null;
+
+    switch(extension(filename)) {
+        case(".jpg"):
+        case(".jpeg"): dcd = new Jpeg(filename); break;
+        case(".png"): dcd = new Png(filename); break;
+        default: writeln("Imaged: no loader for extension " ~ extension(filename));
+    }
+
+    if (dcd is null) {
+        return null;
+    } else {
+        return dcd.image;
+    }
+}
 
 
 /// Structure to report loading/decoding errors

@@ -6,7 +6,7 @@
 + Authors: Callum Anderson
 + Date: June 6, 2012
 +/
-module imaged.png;
+module png;
 
 import std.string, std.file, std.stdio, std.math,
        std.range, std.algorithm, std.conv, std.zlib, std.bitmanip;
