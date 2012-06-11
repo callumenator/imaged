@@ -11,8 +11,9 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 int main()
 {
 
-    string filename = "testimages/earth.png";
-    Png pic = new Png(filename);
+    string filename = "testimages/clouds.jpeg";
+    //Png pic = new Png(filename);
+    Jpeg pic = new Jpeg(filename);
 
     //pic.image.resize(pic.image.width/2, pic.image.height/2);
 
