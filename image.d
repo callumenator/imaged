@@ -83,8 +83,6 @@ interface Image {
 
     @property uint width();
     @property uint height();
-    @property int pixelStride();
-    @property int bitsPerChannel();
     @property ref ubyte[] pixels();
     @property ubyte* pixelsPtr();
 }
@@ -100,7 +98,7 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
         m_height = height;
         m_channels = N;
         m_bitsPerChannel = S;
-        m_pixelStride = N*cast(uint)(ceil(bitsPerChannel/8.0f));
+        m_pixelStride = N*cast(uint)(ceil(m_bitsPerChannel/8.0f));
         m_bitsPerPixel = N*S;
 
         if (!noAlloc) {
@@ -215,8 +213,6 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
     /// Getters
     @property uint width() { return m_width; } /// ditto
     @property uint height() { return m_height; } /// ditto
-    @property int pixelStride() { return m_pixelStride; } /// ditto
-    @property int bitsPerChannel() { return m_bitsPerChannel; } /// ditto
     @property ref ubyte[] pixels() { return m_data; } /// ditto
     @property ubyte* pixelsPtr() { return m_data.ptr; } /// ditto
 
@@ -300,4 +296,126 @@ private:
 }
 
 
+enum Px {
+    L1,
+    L2,
+    L4,
+    L8,
+    L8A8,
+    R8G8B8,
+    R8G8B8A8,
+    L16,
+    L16A16,
+    R16G16B16,
+    R16G16B16A16
+}
 
+class Img(Px F) : Image {
+
+    this(uint width, uint height) {
+
+        /* static */
+        switch(F) {
+            case(Px.L1): m_bitDepth = 1; m_channels = 1; break;
+            case(Px.L2): m_bitDepth = 2; m_channels = 1; break;
+            case(Px.L4): m_bitDepth = 4; m_channels = 1; break;
+            case(Px.L8): m_bitDepth = 8; m_channels = 1; break;
+            default: break;
+        }
+
+        /// Minimum # bytes needed to hold the data
+        int minBytes = cast(int) ceil(width*height*m_bitDepth*m_channels / 8.0f);
+        m_data = new ubyte[](minBytes);
+
+        m_width = width;
+        m_height = height;
+        m_stride = m_bitDepth*m_channels;
+    }
+
+
+    /// Get the pixel at the given index
+    Pixel opIndex(size_t x, size_t y) {
+
+        uint index = 0, offset = 0;
+        getIndexAndOffset(x, y, index, offset);
+
+
+        static if (F == Px.L1) {
+
+            int mask = ((1 << 1) - 1) << (8 - offset - 1);
+            int v = (m_data[index] & mask) >> (8 - offset - 1);
+            return Pixel(v,0,0,0);
+
+        } else if (F == Px.L2) {
+
+            int mask = ((1 << 2) - 1) << (8 - offset - 2);
+            int v = (m_data[index] & mask) >> (8 - offset - 2);
+            return Pixel(v,0,0,0);
+
+        } else if (F == Px.L4) {
+
+            int mask = ((1 << 4) - 1) << (8 - offset - 4);
+            int v = (m_data[index] & mask) >> (8 - offset - 4);
+            return Pixel(v,0,0,0);
+
+        } else if (F == Px.L16) {
+
+            return Pixel(0,0,0,0);
+        } else {
+
+            return Pixel(0,0,0,0);
+        }
+    }
+
+
+    void setPixel(size_t x, size_t y, Pixel p) {}
+    Image copy() { return new Img!(F)(m_width, m_height); }
+    bool resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST) { return true;}
+
+    /// Getters
+    @property uint width() { return m_width; } /// ditto
+    @property uint height() { return m_height; } /// ditto
+    @property ref ubyte[] pixels() { return m_data; } /// ditto
+    @property ubyte* pixelsPtr() { return m_data.ptr; } /// ditto
+
+private:
+
+    /// Get the byte index and bit offset for a given (x,y)
+    void getIndexAndOffset(size_t x, size_t y, out uint index, out uint offset) {
+
+        uint bitIndex = (x + y*m_width)*m_stride;
+        index = bitIndex/8;
+
+        /*
+        * Only calculate the bit mask required to get the value. Only
+        * necessary for sub-bit packing.
+        */
+        static if (F == Px.L1 || F == Px.L2 || F == Px.l4) {
+            offset = bitIndex % 8;
+        } else {
+            mask = uint.max;
+        }
+    }
+
+
+    uint m_width = 0, m_height = 0;
+    int m_stride = 0; /// in bits
+    int m_index = 0; /// offset into data, in bits
+    uint m_bitDepth = 0;
+    uint m_channels = 0;
+    ubyte[] m_data;
+}
+
+unittest {
+
+    Img!(Px.L2) k = new Img!(Px.L2)(10, 10);
+
+    k.pixels[0] = 1 << 3;
+    writefln("%(%08b,%)", k.pixels);
+
+    foreach(x; 0..9) {
+        writeln(k[x,0].r);
+    }
+
+
+}
