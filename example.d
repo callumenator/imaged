@@ -12,7 +12,7 @@ int main()
 {
 
 
-    string filename = "testimages/street.png";
+    string filename = "testimages/earth.png";
     Image pic = load(filename);
 
     //pic.resize(pic.width/2, pic.height/2);

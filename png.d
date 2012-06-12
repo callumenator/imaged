@@ -73,8 +73,6 @@ class Png : Decoder {
             segment.chunkLength = fourBytesToInt(segment.buffer[0..4]);
             char[] type = cast(char[])segment.buffer[4..8];
 
-            writeln(type);
-
             if (type == "IHDR") {
                 segment.chunkType = Chunk.IHDR;
             } else if (type == "IDAT") {
@@ -174,7 +172,7 @@ private:
         */
 
         debug {
-            writeln("PNG ProcessChunk: Processing " ~ to!string(segment.chunkType));
+            //writeln("PNG ProcessChunk: Processing " ~ to!string(segment.chunkType));
         }
 
         /// Compare checksums, but let chunk types determine how to handle failed checks
@@ -310,6 +308,9 @@ private:
     /// Uncompress the stream, apply filters, and store image
     void uncompressStream(ubyte[] stream, bool finalize = false) {
 
+        if (m_currentScanLine >= m_height || m_interlacePass >= 7)
+            return;
+
         ubyte[] data;
         if (!finalize) {
             data = cast(ubyte[])(zliber.uncompress(cast(void[])stream));
@@ -364,17 +365,17 @@ private:
 
                             int idx = (col + imageRow*m_width)*m_stride;
 
-                            foreach(py; 0..1){//min(block_height[pass], m_height - imageRow)) {
-                            foreach(px; 0..1){//min(block_width[pass], m_width - col)) {
-                                int offset = idx + (px * py*m_width)*m_stride;
+                            foreach(py; 0..min(block_height[pass], m_height - imageRow)) {
+                            foreach(px; 0..min(block_width[pass], m_width - col)) {
+                                int offset = idx + (px + py*m_width)*m_stride;
                                 //writeln(offset % m_width, ", ", offset / m_width);
-                                //RGBref[offset..offset+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
+                                RGBref[offset..offset+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
                             }
                             }
 
                             //writeln(scanline_idx, ", ", col, ", ", scanLine2.length);
 
-                            RGBref[idx..idx+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
+                            //RGBref[idx..idx+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
                             scanline_idx += m_stride;
                             col = col + col_increment[pass];
                         }
@@ -398,8 +399,7 @@ private:
                     m_currentScanLine = 0;
                     m_interlacePass ++;
 
-                    if (m_interlacePass == 7) {
-                        m_interlacePass = 0;
+                    if (m_interlacePass == 7 || m_currentScanLine >= m_height) {
                         break;
                     } else {
                         scanLine1 = new ubyte[](m_bytesPerScanline);
@@ -451,8 +451,8 @@ private:
 
     /// Apply filter 1 to scanline (difference filter)
     void filter1() {
-        //scanLine2[1+m_stride..$] += scanLine2[1..$-m_stride];
 
+        /// Can't use vector op because results need to accumulate
         for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
             scanLine2[i..i+m_stride] += ( scanLine2[i-m_stride..i] );
         }
@@ -500,7 +500,7 @@ private:
         }
 
 
-        foreach(i; 0..m_stride) {
+        foreach(i; 1..m_stride+1) {
             scanLine2[i] += paeth(0, scanLine1[i], 0);
         }
 
