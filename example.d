@@ -10,11 +10,11 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
 {
-    //string filename = "testimages/pngtestsuite/basi3p04.png";
-    string filename = "testimages/books.png";
+    string filename = "testimages/pngtestsuite/basi0g16.png";
+    //string filename = "testimages/books.png";
     Image pic = load(filename);
 
-    //pic.resize(pic.width/2, pic.height/2);
+    pic.resize(pic.width*10, pic.height*10, Image.ResizeAlgo.CROP);
 
     /// Make a window and simpledisplay image
     sd.SimpleWindow wnd = new sd.SimpleWindow(pic.width, pic.height);
@@ -26,7 +26,7 @@ int main()
         foreach(y; 0..pic.height) {
             Pixel pix = pic[x,y];
 
-            int shft = 0;
+            int shft = 8;
             int r = pix.r >> shft;
             int g = pix.g >> shft;
             int b = pix.b >> shft;
