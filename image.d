@@ -599,19 +599,3 @@ private:
     ubyte[] m_data;
 }
 
-
-
-unittest {
-
-    Img!(Px.L2) k = new Img!(Px.L2)(10, 10);
-    Img!(Px.R16G16B16A16) l = new Img!(Px.R16G16B16A16)(10, 10);
-
-    k.pixels[0] = 1 << 3;
-    writefln("%(%08b,%)", k.pixels);
-
-    foreach(x; 0..9) {
-        writeln(k[x,0].r);
-    }
-
-
-}

@@ -21,18 +21,18 @@ class Png : Decoder {
 
     enum Chunk {
         NONE,
-        IHDR, /// header
-        IDAT, /// image
-        PLTE, /// palette
-        IEND /// end of image
+        IHDR, // header
+        IDAT, // image
+        PLTE, // palette
+        IEND // end of image
     }
 
-    /// Construct with a filename, and parse data
+    // Construct with a filename, and parse data
     this(string filename) {
 
         zliber = new UnCompress();
 
-        /// Loop through the image data
+        // Loop through the image data
         auto data = cast(ubyte[]) read(filename);
         foreach (bite; data) {
             if (errorState.code == 0) {
@@ -53,12 +53,12 @@ class Png : Decoder {
 
         if (!m_haveHeader && (segment.buffer.length == 8)) {
             if (segment.buffer[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
-                /// File has correct header
+                // File has correct header
                 segment.buffer.clear;
                 m_pendingChunk = true;
                 m_haveHeader = true;
             } else {
-                /// Not a valid png
+                // Not a valid png
                 m_errorState.code = 1;
                 m_errorState.message = "Header does not match PNG type!";
                 writefln("%(%02x %)", segment.buffer);
@@ -96,7 +96,7 @@ class Png : Decoder {
         }
 
         m_totalBytesParsed ++;
-    } /// parse
+    } // parse
 
 
 private:
@@ -145,7 +145,7 @@ private:
         m_stride,
         m_pixelScale;
 
-
+    ubyte[] m_palette;
 
     /**
     * Color types are:
@@ -158,7 +158,7 @@ private:
     * 6       8,16        Each pixel is an R,G,B triple, followed by an alpha sample.
     */
 
-    /// COnvert 4 bytes to an integer
+    // COnvert 4 bytes to an integer
     int fourBytesToInt(ubyte[] bytes) {
         return (bytes[0] << 24 | bytes[1] << 16 | bytes[2] <<  8 | bytes[3]);
     }
@@ -176,7 +176,7 @@ private:
             //writeln("PNG ProcessChunk: Processing " ~ to!string(segment.chunkType));
         }
 
-        /// Compare checksums, but let chunk types determine how to handle failed checks
+        // Compare checksums, but let chunk types determine how to handle failed checks
         bool csum_passed = true;
         uint csum_calc = crc32(0, segment.buffer[4..$-4]);
         uint csum_read = fourBytesToInt(segment.buffer[$-4..$]);
@@ -185,7 +185,7 @@ private:
 
         switch(segment.chunkType) {
 
-            /// IHDR chunk contains height, width info
+            // IHDR chunk contains height, width info
             case(Chunk.IHDR): {
 
                 if (!csum_passed) {
@@ -203,48 +203,12 @@ private:
                 m_interlace = segment.buffer[20];
                 m_pixelScale = 1;
 
-                final switch (m_colorType) {
-                    case(0): { /// greyscale
-                        m_nChannels = 1;
-                        final switch(m_bitDepth) {
-                            case(1): m_image = new Img!(Px.L1)(m_width, m_height); m_pixelScale = 255; break;
-                            case(2): m_image = new Img!(Px.L2)(m_width, m_height); m_pixelScale = 64; break;
-                            case(4): m_image = new Img!(Px.L4)(m_width, m_height); m_pixelScale = 16; break;
-                            case(8): m_image = new Img!(Px.L8)(m_width, m_height); break;
-                            case(16): m_image = new Img!(Px.L16)(m_width, m_height); break;
-                        }
-                        break;
-                    }
-                    case(2): { /// rgb
-                        m_nChannels = 3;
-                        final switch(m_bitDepth) {
-                            case(8): m_image = new Img!(Px.R8G8B8)(m_width, m_height); break;
-                            case(16): m_image = new Img!(Px.R16G16B16)(m_width, m_height); break;
-                        }
-                        break;
-                    }
-                    case(3): { /// palette
-                        m_nChannels = 1;
-                        m_image = new Img!(Px.R8G8B8)(m_width, m_height);
-                        break;
-                    }
-                    case(4): { /// greyscale + alpha
-                        m_nChannels = 2;
-                        final switch(m_bitDepth) {
-                            case(8): m_image = new Img!(Px.L8A8)(m_width, m_height); break;
-                            case(16): m_image = new Img!(Px.L16A16)(m_width, m_height); break;
-                        }
-                        break;
-                    }
-                    case(6): { /// rgba
-                        m_nChannels = 4;
-                        final switch(m_bitDepth) {
-                            case(8): m_image = new Img!(Px.R8G8B8A8)(m_width, m_height); break;
-                            case(16): m_image = new Img!(Px.R16G16B16A16)(m_width, m_height); break;
-                        }
-                        break;
-                    }
-                }
+                // This function sets some state, like m_nChannels
+                allocateImage();
+
+                // Calculate pixels per line and scanlines per pass for interlacing
+                if (m_interlace == 1)
+                    setInterlace();
 
                 auto bitStride = m_nChannels*m_bitDepth;
                 auto imageBitsPerLine = m_width*bitStride;
@@ -262,45 +226,6 @@ private:
 
                 scanLine1 = new ubyte[](m_bytesPerScanline);
 
-                /// Calculate pixels per line and scanlines per pass for interlacing
-                foreach(i; 0..m_width) {
-                    if (i % 8 == 0) m_pixPerLine[0] ++;
-                    if (i % 8 == 4) m_pixPerLine[1] ++;
-                    if (i % 8 == 0 ||
-                        i % 8 == 4) m_pixPerLine[2] ++;
-                    if (i % 8 == 2 ||
-                        i % 8 == 6) m_pixPerLine[3] ++;
-                    if (i % 8 == 0 ||
-                        i % 8 == 2 ||
-                        i % 8 == 4 ||
-                        i % 8 == 6 ) m_pixPerLine[4] ++;
-                    if (i % 8 == 1 ||
-                        i % 8 == 3 ||
-                        i % 8 == 5 ||
-                        i % 8 == 7 ) m_pixPerLine[5] ++;
-                }
-                m_pixPerLine[6] = m_width;
-
-                foreach(i; 0..m_height) {
-                    if (i % 8 == 0) m_scanLines[0] ++;
-                    if (i % 8 == 0) m_scanLines[1] ++;
-                    if (i % 8 == 4) m_scanLines[2] ++;
-                    if (i % 8 == 0 ||
-                        i % 8 == 4) m_scanLines[3] ++;
-                    if (i % 8 == 2 ||
-                        i % 8 == 6 ) m_scanLines[4] ++;
-                    if (i % 8 == 0 ||
-                        i % 8 == 2 ||
-                        i % 8 == 4 ||
-                        i % 8 == 6 ) m_scanLines[5] ++;
-                    if (i % 8 == 1 ||
-                        i % 8 == 3 ||
-                        i % 8 == 5 ||
-                        i % 8 == 7 ) m_scanLines[6] ++;
-                }
-
-
-
                 debug {
                     writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
                              "Compression: %s\nFilter: %s\nInterlacing: %s\nStride: %s",
@@ -310,7 +235,7 @@ private:
                 break;
             }
 
-            /// Actual image data
+            // Actual image data
             case(Chunk.IDAT): {
 
                 if (!csum_passed) {
@@ -323,7 +248,7 @@ private:
                 break;
             }
 
-            /// Palette chunk
+            // Palette chunk
             case(Chunk.PLTE): {
 
                 if (!csum_passed) {
@@ -332,12 +257,16 @@ private:
                     return;
                 }
 
+                if (m_colorType == 3)
+                    m_palette = segment.buffer[8..$-4].dup;
+
                 break;
             }
 
-            /// Image end
+            // Image end
             case(Chunk.IEND): {
 
+                // Flush out the rest of the stream
                 uncompressStream(scanLine2, true);
                 break;
             }
@@ -349,10 +278,97 @@ private:
                 break;
             }
         }
-    } /// processChunk
+    } // processChunk
 
 
-    /// Uncompress the stream, apply filters, and store image
+    // Allocate the image
+    void allocateImage() {
+        final switch (m_colorType) {
+            case(0): { // greyscale
+                m_nChannels = 1;
+                final switch(m_bitDepth) {
+                    case(1): m_image = new Img!(Px.L1)(m_width, m_height); m_pixelScale = 255; break;
+                    case(2): m_image = new Img!(Px.L2)(m_width, m_height); m_pixelScale = 64; break;
+                    case(4): m_image = new Img!(Px.L4)(m_width, m_height); m_pixelScale = 16; break;
+                    case(8): m_image = new Img!(Px.L8)(m_width, m_height); break;
+                    case(16): m_image = new Img!(Px.L16)(m_width, m_height); break;
+                }
+                break;
+            }
+            case(2): { // rgb
+                m_nChannels = 3;
+                final switch(m_bitDepth) {
+                    case(8): m_image = new Img!(Px.R8G8B8)(m_width, m_height); break;
+                    case(16): m_image = new Img!(Px.R16G16B16)(m_width, m_height); break;
+                }
+                break;
+            }
+            case(3): { // palette
+                m_nChannels = 1;
+                m_image = new Img!(Px.R8G8B8)(m_width, m_height);
+                break;
+            }
+            case(4): { // greyscale + alpha
+                m_nChannels = 2;
+                final switch(m_bitDepth) {
+                    case(8): m_image = new Img!(Px.L8A8)(m_width, m_height); break;
+                    case(16): m_image = new Img!(Px.L16A16)(m_width, m_height); break;
+                }
+                break;
+            }
+            case(6): { // rgba
+                m_nChannels = 4;
+                final switch(m_bitDepth) {
+                    case(8): m_image = new Img!(Px.R8G8B8A8)(m_width, m_height); break;
+                    case(16): m_image = new Img!(Px.R16G16B16A16)(m_width, m_height); break;
+                }
+                break;
+            }
+        }
+    } // allocateImage
+
+
+    // Set some state dealing with interlacing
+    void setInterlace() {
+        foreach(i; 0..m_width) {
+            if (i % 8 == 0) m_pixPerLine[0] ++;
+            if (i % 8 == 4) m_pixPerLine[1] ++;
+            if (i % 8 == 0 ||
+                i % 8 == 4) m_pixPerLine[2] ++;
+            if (i % 8 == 2 ||
+                i % 8 == 6) m_pixPerLine[3] ++;
+            if (i % 8 == 0 ||
+                i % 8 == 2 ||
+                i % 8 == 4 ||
+                i % 8 == 6 ) m_pixPerLine[4] ++;
+            if (i % 8 == 1 ||
+                i % 8 == 3 ||
+                i % 8 == 5 ||
+                i % 8 == 7 ) m_pixPerLine[5] ++;
+        }
+        m_pixPerLine[6] = m_width;
+
+        foreach(i; 0..m_height) {
+            if (i % 8 == 0) m_scanLines[0] ++;
+            if (i % 8 == 0) m_scanLines[1] ++;
+            if (i % 8 == 4) m_scanLines[2] ++;
+            if (i % 8 == 0 ||
+                i % 8 == 4) m_scanLines[3] ++;
+            if (i % 8 == 2 ||
+                i % 8 == 6 ) m_scanLines[4] ++;
+            if (i % 8 == 0 ||
+                i % 8 == 2 ||
+                i % 8 == 4 ||
+                i % 8 == 6 ) m_scanLines[5] ++;
+            if (i % 8 == 1 ||
+                i % 8 == 3 ||
+                i % 8 == 5 ||
+                i % 8 == 7 ) m_scanLines[6] ++;
+        }
+    } // setInterlace
+
+
+    // Uncompress the stream, apply filters, and store image
     void uncompressStream(ubyte[] stream, bool finalize = false) {
 
         if (m_currentScanLine >= m_height || m_interlacePass >= 7)
@@ -373,7 +389,7 @@ private:
         int taken = 0, takeLen = 0;
         while (taken < data.length) {
 
-            /// Put data into the lower scanline first
+            // Put data into the lower scanline first
             takeLen = bytesPerLine - scanLine2.length;
             if (takeLen > 0 && taken + takeLen <= data.length) {
                 scanLine2 ~= data[taken..taken+takeLen];
@@ -385,14 +401,20 @@ private:
 
             if (scanLine2.length == bytesPerLine) {
 
-                /// Have a full scanline, so filter it...
+                // Have a full scanline, so filter it...
                 filter();
 
-                /// Put it into the image
-                if (m_interlace == 0) {
+                // Put it into the image
+                if (m_interlace == 0) { // Not interlaced
 
-                    // Not interlaced, so goes straight in
-                    m_image.setRow(m_currentScanLine, scanLine2[1..$]);
+                    if (m_colorType == 3) { // Palette color
+
+
+
+
+                    } else { // Non-palette
+                        m_image.setRow(m_currentScanLine, scanLine2[1..$]);
+                    }
 
                 } else {
 
@@ -445,10 +467,10 @@ private:
                 } // if m_interlace
 
 
-                /// Increment scanline counter
+                // Increment scanline counter
                 m_currentScanLine ++;
 
-                /// Swap the scanlines
+                // Swap the scanlines
                 auto tmp = scanLine1;
                 scanLine1 = scanLine2;
                 scanLine2 = scanLine1;
@@ -473,12 +495,12 @@ private:
                 }
             }
 
-        } /// while
+        } // while
 
-    } /// uncompressStream
+    } // uncompressStream
 
 
-    /// Calculate some per-pass info
+    // Calculate some per-pass info
     void passInfo(out int bytesPerLine, out int nscanLines) {
 
         bytesPerLine = 0;
@@ -506,31 +528,31 @@ private:
             bytesPerLine = m_bytesPerScanline;
             nscanLines = m_height;
         }
-    }
+    } // passInfo
 
 
-    /// Apply filters to a scanline
+    // Apply filters to a scanline
     void filter() {
 
         int filterType = scanLine2[0];
 
         switch(filterType) {
-            case(0): { /// no filtering, excellent
+            case(0): { // no filtering, excellent
                 break;
             }
-            case(1): { /// difference filter, using previous pixel on same scanline
+            case(1): { // difference filter, using previous pixel on same scanline
                 filter1();
                 break;
             }
-            case(2): { /// difference filter, using pixel on scanline above, same column
+            case(2): { // difference filter, using pixel on scanline above, same column
                 filter2();
                 break;
             }
-            case(3): { /// average filter, average of pixel above and pixel to left
+            case(3): { // average filter, average of pixel above and pixel to left
                 filter3();
                 break;
             }
-            case(4): { /// Paeth filter
+            case(4): { // Paeth filter
                 filter4();
                 break;
             }
@@ -539,27 +561,27 @@ private:
                         ~ to!string(m_currentScanLine) ~ ", Pass: " ~ to!string(m_interlacePass));
                 break;
             }
-        } /// switch filterType
+        } // switch filterType
     }
 
 
-    /// Apply filter 1 to scanline (difference filter)
+    // Apply filter 1 to scanline (difference filter)
     void filter1() {
 
-        /// Can't use vector op because results need to accumulate
+        // Can't use vector op because results need to accumulate
         for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
             scanLine2[i..i+m_stride] += ( scanLine2[i-m_stride..i] );
         }
     }
 
 
-    /// Apply filter 2 to scanline (difference filter, using scanline above)
+    // Apply filter 2 to scanline (difference filter, using scanline above)
     void filter2() {
         scanLine2[1..$] += scanLine1[1..$];
     }
 
 
-    /// Apply filter 3 to scanline (average filter)
+    // Apply filter 3 to scanline (average filter)
     void filter3() {
 
         scanLine2[1..1+m_stride] += cast(ubyte[])(scanLine1[1..1+m_stride] / 2);
@@ -573,7 +595,7 @@ private:
     }
 
 
-    /// Apply filter 4 to scanline (Paeth filter)
+    // Apply filter 4 to scanline (Paeth filter)
     void filter4() {
 
         int paeth(ubyte a, ubyte b, ubyte c) {
@@ -604,7 +626,7 @@ private:
             }
         }
 
-    } /// filter4
+    } // filter4
 
 
 }
