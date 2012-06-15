@@ -1,15 +1,11 @@
 // Written in the D programming language.
 
-/++
-+ Copyright:
-Copyright 2012 -
-+ License:
-$(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
-+ Authors:
-Callum Anderson
-+ Date:
-June 6, 2012
-+/
+/**
+* Copyright: Copyright 2012 -
+* License: $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+* Authors: Callum Anderson
+* Date: June 6, 2012
+*/
 module jpeg;
 
 import std.string, std.file, std.stdio, std.math,

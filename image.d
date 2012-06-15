@@ -1,15 +1,11 @@
 // Written in the D programming language.
 
-/++
-+ Copyright:
-Copyright 2012 -
-+ License:
-$(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
-+ Authors:
-Callum Anderson
-+ Date:
-June 8, 2012
-+/
+/**
+* Copyright: Copyright 2012 -
+* License: $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+* Authors: Callum Anderson
+* Date: June 8, 2012
+*/
 module image;
 
 import std.math, std.stdio, std.traits, std.conv, std.path;
