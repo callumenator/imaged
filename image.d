@@ -531,43 +531,17 @@ class Img(Px F) : Image {
     // Set a whole row (scanline) of data from the given buffer. Rows count down from the top.
     void setRow(size_t y, const(ubyte[]) data) {
 
-        auto takeBits = m_width*m_bitDepth*m_channels;
-        auto subBits = takeBits % 8;
+        auto takeBytes = m_width*m_stride;
         auto index = getIndex(0, y);
 
         debug { // Check array bounds if debug mode
-            uint reqLen = takeBits / 8;
-            if (subBits > 0) {
-                reqLen ++;
-            }
-            if (data.length < reqLen) {
-                writeln(takeBits/8, ", ", reqLen, ", ", data.length);
+            if (data.length < takeBytes) {
+                writeln(takeBytes, ", ", data.length);
                 throw new Exception("Image setRow: buffer does not have required length!");
             }
         }
 
-        // Normal byte packing
-        static if (F == Px.L8 ||
-                   F == Px.L8A8 ||
-                   F == Px.R8G8B8 ||
-                   F == Px.R8G8B8A8 ||
-                   F == Px.L16 ||
-                   F == Px.L16A16 ||
-                   F == Px.R16G16B16 ||
-                   F == Px.R16G16B16A16 ) {
-
-            m_data[index..index+(takeBits/8)] = data[0..(takeBits/8)];
-
-        } else { // Sub-byte packing, need to loop through individual bytes and unpack
-
-            foreach(bite; data) {
-                for(int i=0; i<8; i+=m_bitDepth) {
-                    int mask = ((1 << m_bitDepth) - 1) << (8 - i - m_bitDepth);
-                    m_data[index] = cast(ubyte)(((bite & mask) >> (8 - i - m_bitDepth)) * m_scale);
-                    index ++;
-                }
-            }
-        }
+        m_data[index..index+takeBytes] = data[];
     }
 
 

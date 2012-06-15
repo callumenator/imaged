@@ -404,17 +404,30 @@ private:
                 // Have a full scanline, so filter it...
                 filter();
 
+                auto scanLineStride = m_stride;
+
+                // Unpack the bits if needed
+                ubyte[] sLine;
+                if (m_bitDepth < 8) {
+                    sLine = unpackBits(scanLine2[1..$]);
+                } else {
+                    sLine = scanLine2[1..$];
+                }
+
+                // For palette colortypes, convert scanline to RGB
+                if (m_colorType == 3) {
+                    sLine = convertPaletteToRGB(sLine);
+                    scanLineStride = 3;
+                }
+
+                // Scale the bits up to 0-255
+                if (m_colorType != 3 && m_bitDepth < 8)
+                        sLine[] *= cast(ubyte)m_pixelScale;
+
                 // Put it into the image
                 if (m_interlace == 0) { // Not interlaced
 
-                    if (m_colorType == 3) { // Palette color
-
-
-
-
-                    } else { // Non-palette
-                        m_image.setRow(m_currentScanLine, scanLine2[1..$]);
-                    }
+                    m_image.setRow(m_currentScanLine, sLine);
 
                 } else {
 
@@ -423,44 +436,22 @@ private:
 
                         int pass = m_interlacePass;
                         int col = start_col[pass];
-                        int i = 1; // scanline offset
+                        int i = 0; // scanline offset
 
                         while (col < m_width) {
 
-                            if (m_bitDepth < 8) {
+                            auto maxY = min(block_height[pass], m_height - imageRow);
+                            auto maxX = min(block_width[pass], m_width - col);
 
-                                for(int j=0; j<8; j+=m_bitDepth) {
-
-                                    auto maxY = min(block_height[pass], m_height - imageRow);
-                                    auto maxX = min(block_width[pass], m_width - col);
-
-                                    auto mask = ((1<<m_bitDepth)-1) << (8 - j - m_bitDepth);
-                                    auto val = ((scanLine2[i] & mask) >> (8 - j - m_bitDepth));
-
-                                    foreach(py; 0..maxY) {
-                                        foreach(px; 0..maxX) {
-                                            m_image.setPixel(col + px, imageRow + py, Pixel(val,0,0,0));
-                                        }
-                                    }
-                                    col = col + col_increment[pass];
+                            foreach(py; 0..maxY) {
+                                foreach(px; 0..maxX) {
+                                    m_image.setPixel(col + px, imageRow + py,
+                                                     sLine[i..i+scanLineStride]);
                                 }
-
-                            } else {
-
-                                auto maxY = min(block_height[pass], m_height - imageRow);
-                                auto maxX = min(block_width[pass], m_width - col);
-
-                                foreach(py; 0..maxY) {
-                                    foreach(px; 0..maxX) {
-                                        m_image.setPixel(col + px, imageRow + py,
-                                                         scanLine2[i..i+m_stride]);
-                                    }
-                                }
-                                col = col + col_increment[pass];
                             }
 
-                            i += m_stride;
-
+                            col = col + col_increment[pass];
+                            i += scanLineStride;
 
                         } // while col < m_width
                     } // with(m_ilace)
@@ -529,6 +520,52 @@ private:
             nscanLines = m_height;
         }
     } // passInfo
+
+
+    // Unpack a scanline's worth of bits into a byte array
+    ubyte[] unpackBits(ubyte[] data) {
+
+        int bytesPerLine = 0;
+        if (m_interlace == 0) {
+            bytesPerLine = m_width;
+        } else {
+            bytesPerLine = m_pixPerLine[m_interlacePass];
+        }
+
+        ubyte[] unpacked;
+        unpacked.length = bytesPerLine;
+
+        auto data_index = 0, byte_index = 0;
+        while(byte_index < bytesPerLine) {
+
+            for(int j = 0; j < 8; j += m_bitDepth) {
+                auto mask = ((1<<m_bitDepth)-1) << (8 - j - m_bitDepth);
+                auto val = ((data[data_index] & mask) >> (8 - j - m_bitDepth));
+                unpacked[byte_index] = cast(ubyte) val;
+                byte_index ++;
+                if (byte_index >= bytesPerLine)
+                    break;
+            }
+            data_index ++;
+        }
+
+        return unpacked;
+    } // unpackBits
+
+
+    // Convert a scanline of palette values to a scanline of 8-bit RGB's
+    ubyte[] convertPaletteToRGB(ubyte[] data) {
+
+        ubyte[] rgb;
+        rgb.length = data.length * 3;
+        foreach(i; 0..data.length) {
+            rgb[i*3] = m_palette[data[i]*3];
+            rgb[i*3 + 1] = m_palette[data[i]*3 + 1];
+            rgb[i*3 + 2] = m_palette[data[i]*3 + 2];
+        }
+
+        return rgb;
+    } // convertPaletteToRGB
 
 
     // Apply filters to a scanline
