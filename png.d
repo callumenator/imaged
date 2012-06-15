@@ -1,15 +1,19 @@
 // Written in the D programming language.
 
 /++
-+ Copyright: Copyright 2012 -
-+ License: $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
-+ Authors: Callum Anderson
-+ Date: June 6, 2012
++ Copyright:
+Copyright 2012 -
++ License:
+$(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
++ Authors:
+Callum Anderson
++ Date:
+June 6, 2012
 +/
 module png;
 
 import std.string, std.file, std.stdio, std.math,
-       std.range, std.algorithm, std.conv, std.zlib, std.bitmanip;
+std.range, std.algorithm, std.conv, std.zlib, std.bitmanip;
 
 import image;
 
@@ -17,9 +21,10 @@ import image;
 /**
 * Png loader.
 */
-class Png : Decoder {
-
-    enum Chunk {
+class Png : Decoder
+{
+    enum Chunk
+    {
         NONE,
         IHDR, // header
         IDAT, // image
@@ -28,17 +33,22 @@ class Png : Decoder {
     }
 
     // Construct with a filename, and parse data
-    this(string filename) {
-
+    this(string filename)
+    {
         zliber = new UnCompress();
 
         // Loop through the image data
         auto data = cast(ubyte[]) read(filename);
-        foreach (bite; data) {
-            if (errorState.code == 0) {
+        foreach (bite; data)
+        {
+            if (errorState.code == 0)
+            {
                 parse(bite);
-            } else {
-                debug {
+            }
+            else
+            {
+                debug
+                {
                     writeln("ERROR: ", errorState.message);
                 }
                 break;
@@ -47,17 +57,21 @@ class Png : Decoder {
     }
 
 
-    void parse(ubyte bite) {
-
+    void parse(ubyte bite)
+    {
         segment.buffer ~= bite;
 
-        if (!m_haveHeader && (segment.buffer.length == 8)) {
-            if (segment.buffer[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+        if (!m_haveHeader && (segment.buffer.length == 8))
+        {
+            if (segment.buffer[0..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+            {
                 // File has correct header
                 segment.buffer.clear;
                 m_pendingChunk = true;
                 m_haveHeader = true;
-            } else {
+            }
+            else
+            {
                 // Not a valid png
                 m_errorState.code = 1;
                 m_errorState.message = "Header does not match PNG type!";
@@ -66,28 +80,37 @@ class Png : Decoder {
             }
         }
 
-        if (m_pendingChunk && (segment.buffer.length == 8)) {
-
+        if (m_pendingChunk && (segment.buffer.length == 8))
+        {
             m_pendingChunk = false;
 
             segment.chunkLength = fourBytesToInt(segment.buffer[0..4]);
             char[] type = cast(char[])segment.buffer[4..8];
 
-            if (type == "IHDR") {
+            if (type == "IHDR")
+            {
                 segment.chunkType = Chunk.IHDR;
-            } else if (type == "IDAT") {
+            }
+            else if (type == "IDAT")
+            {
                 segment.chunkType = Chunk.IDAT;
-            } else if (type == "PLTE") {
+            }
+            else if (type == "PLTE")
+            {
                 segment.chunkType = Chunk.PLTE;
-            } else if (type == "IEND") {
+            }
+            else if (type == "IEND")
+            {
                 segment.chunkType = Chunk.IEND;
-            } else {
+            }
+            else
+            {
 
             }
         }
 
-        if (m_haveHeader && !m_pendingChunk && (segment.buffer.length == segment.chunkLength + 8 + 4)) {
-
+        if (m_haveHeader && !m_pendingChunk && (segment.buffer.length == segment.chunkLength + 8 + 4))
+        {
             processChunk();
 
             m_previousChunk = segment.chunkType;
@@ -110,7 +133,8 @@ private:
     int[7] m_pixPerLine;
     int[7] m_scanLines;
 
-    struct InterLace {
+    struct InterLace
+    {
         int imageRow;
         int[7] start_row =      [ 0, 0, 4, 0, 2, 0, 1 ];
         int[7] start_col =      [ 0, 4, 0, 2, 0, 1, 0 ];
@@ -122,7 +146,8 @@ private:
     InterLace m_ilace;
 
 
-    struct PNGSegment {
+    struct PNGSegment
+    {
         Chunk chunkType = Chunk.NONE;
         int chunkLength;
         ubyte[] buffer;
@@ -136,14 +161,14 @@ private:
 
     int m_width, m_height;
     int m_bitDepth,
-        m_colorType,
-        m_compression,
-        m_filter,
-        m_interlace,
-        m_bytesPerScanline,
-        m_nChannels,
-        m_stride,
-        m_pixelScale;
+    m_colorType,
+    m_compression,
+    m_filter,
+    m_interlace,
+    m_bytesPerScanline,
+    m_nChannels,
+    m_stride,
+    m_pixelScale;
 
     ubyte[] m_palette;
 
@@ -159,20 +184,22 @@ private:
     */
 
     // COnvert 4 bytes to an integer
-    int fourBytesToInt(ubyte[] bytes) {
+    int fourBytesToInt(ubyte[] bytes)
+    {
         return (bytes[0] << 24 | bytes[1] << 16 | bytes[2] <<  8 | bytes[3]);
     }
 
 
-    void processChunk() {
-
+    void processChunk()
+    {
         /**
         * Remeber - first 8 bytes in the segment.buffer are length (4byte) and type (4byte)
         * So chunk data begins at index 8 of the buffer. We keep this stuff for calculating
         * the checksum (it actually only uses the chunk data and the type field).
         */
 
-        debug {
+        debug
+        {
             //writeln("PNG ProcessChunk: Processing " ~ to!string(segment.chunkType));
         }
 
@@ -183,224 +210,279 @@ private:
         if (csum_calc != csum_read)
             csum_passed = false;
 
-        switch(segment.chunkType) {
-
+        switch(segment.chunkType)
+        {
             // IHDR chunk contains height, width info
-            case(Chunk.IHDR): {
-
-                if (!csum_passed) {
-                    errorState.code = 1;
-                    errorState.message = "PNG: Checksum failed in IHDR!";
-                    return;
-                }
-
-                m_width = fourBytesToInt(segment.buffer[8..12]);
-                m_height = fourBytesToInt(segment.buffer[12..16]);
-                m_bitDepth = segment.buffer[16];
-                m_colorType = segment.buffer[17];
-                m_compression = segment.buffer[18];
-                m_filter = segment.buffer[19];
-                m_interlace = segment.buffer[20];
-                m_pixelScale = 1;
-
-                // This function sets some state, like m_nChannels
-                allocateImage();
-
-                // Calculate pixels per line and scanlines per pass for interlacing
-                if (m_interlace == 1)
-                    setInterlace();
-
-                auto bitStride = m_nChannels*m_bitDepth;
-                auto imageBitsPerLine = m_width*bitStride;
-
-                m_bytesPerScanline = 1 + imageBitsPerLine/8;
-                m_stride = bitStride/8;
-
-                if (imageBitsPerLine % 8 > 0) {
-                    m_bytesPerScanline ++;
-                    m_stride = 1;
-                }
-
-                if (m_stride == 0)
-                    m_stride = 1;
-
-                scanLine1 = new ubyte[](m_bytesPerScanline);
-
-                debug {
-                    writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
-                             "Compression: %s\nFilter: %s\nInterlacing: %s\nStride: %s",
-                             m_width, m_height, m_bitDepth, m_colorType,
-                             m_compression, m_filter, m_interlace, m_stride);
-                }
-                break;
+        case(Chunk.IHDR):
+        {
+            if (!csum_passed)
+            {
+                errorState.code = 1;
+                errorState.message = "PNG: Checksum failed in IHDR!";
+                return;
             }
 
-            // Actual image data
-            case(Chunk.IDAT): {
+            m_width = fourBytesToInt(segment.buffer[8..12]);
+            m_height = fourBytesToInt(segment.buffer[12..16]);
+            m_bitDepth = segment.buffer[16];
+            m_colorType = segment.buffer[17];
+            m_compression = segment.buffer[18];
+            m_filter = segment.buffer[19];
+            m_interlace = segment.buffer[20];
+            m_pixelScale = 1;
 
-                if (!csum_passed) {
-                    errorState.code = 1;
-                    errorState.message = "PNG: Checksum failed in IDAT!";
-                    return;
-                }
+            // This function sets some state, like m_nChannels
+            allocateImage();
 
-                uncompressStream(segment.buffer[8..$-4]);
-                break;
+            // Calculate pixels per line and scanlines per pass for interlacing
+            if (m_interlace == 1)
+            {
+                setInterlace();
             }
 
-            // Palette chunk
-            case(Chunk.PLTE): {
+            auto bitStride = m_nChannels*m_bitDepth;
+            auto imageBitsPerLine = m_width*bitStride;
 
-                if (!csum_passed) {
-                    errorState.code = 1;
-                    errorState.message = "PNG: Checksum failed in IPLTE!";
-                    return;
-                }
+            m_bytesPerScanline = 1 + imageBitsPerLine/8;
+            m_stride = bitStride/8;
 
-                if (m_colorType == 3)
-                    m_palette = segment.buffer[8..$-4].dup;
-
-                break;
+            if (imageBitsPerLine % 8 > 0)
+            {
+                m_bytesPerScanline ++;
+                m_stride = 1;
             }
 
-            // Image end
-            case(Chunk.IEND): {
-
-                // Flush out the rest of the stream
-                uncompressStream(scanLine2, true);
-                break;
+            if (m_stride == 0)
+            {
+                m_stride = 1;
             }
 
-            default: {
-                debug {
-                    writeln("PNG ProcessChunk: Un-handled chunk " ~ to!string(segment.chunkType));
-                }
-                break;
+            scanLine1 = new ubyte[](m_bytesPerScanline);
+
+            debug
+            {
+                writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
+                "Compression: %s\nFilter: %s\nInterlacing: %s\nStride: %s",
+                m_width, m_height, m_bitDepth, m_colorType,
+                m_compression, m_filter, m_interlace, m_stride);
             }
+            break;
+        }
+
+        // Actual image data
+        case(Chunk.IDAT):
+        {
+            if (!csum_passed)
+            {
+                errorState.code = 1;
+                errorState.message = "PNG: Checksum failed in IDAT!";
+                return;
+            }
+
+            uncompressStream(segment.buffer[8..$-4]);
+            break;
+        }
+
+        // Palette chunk
+        case(Chunk.PLTE):
+        {
+            if (!csum_passed)
+            {
+                errorState.code = 1;
+                errorState.message = "PNG: Checksum failed in IPLTE!";
+                return;
+            }
+
+            if (m_colorType == 3)
+                m_palette = segment.buffer[8..$-4].dup;
+
+            break;
+        }
+
+        // Image end
+        case(Chunk.IEND):
+        {
+            // Flush out the rest of the stream
+            uncompressStream(scanLine2, true);
+            break;
+        }
+
+        default:
+        {
+            debug
+            {
+                writeln("PNG ProcessChunk: Un-handled chunk " ~ to!string(segment.chunkType));
+            }
+            break;
+        }
         }
     } // processChunk
 
 
     // Allocate the image
-    void allocateImage() {
-        final switch (m_colorType) {
-            case(0): { // greyscale
-                m_nChannels = 1;
-                final switch(m_bitDepth) {
-                    case(1): m_image = new Img!(Px.L1)(m_width, m_height); m_pixelScale = 255; break;
-                    case(2): m_image = new Img!(Px.L2)(m_width, m_height); m_pixelScale = 64; break;
-                    case(4): m_image = new Img!(Px.L4)(m_width, m_height); m_pixelScale = 16; break;
-                    case(8): m_image = new Img!(Px.L8)(m_width, m_height); break;
-                    case(16): m_image = new Img!(Px.L16)(m_width, m_height); break;
-                }
+    void allocateImage()
+    {
+        final switch (m_colorType)
+        {
+        case(0):   // greyscale
+        {
+            m_nChannels = 1;
+            final switch(m_bitDepth)
+            {
+            case(1):
+                m_image = new Img!(Px.L8)(m_width, m_height);
+                m_pixelScale = 255;
+                break;
+            case(2):
+                m_image = new Img!(Px.L8)(m_width, m_height);
+                m_pixelScale = 64;
+                break;
+            case(4):
+                m_image = new Img!(Px.L8)(m_width, m_height);
+                m_pixelScale = 16;
+                break;
+            case(8):
+                m_image = new Img!(Px.L8)(m_width, m_height);
+                break;
+            case(16):
+                m_image = new Img!(Px.L16)(m_width, m_height);
                 break;
             }
-            case(2): { // rgb
-                m_nChannels = 3;
-                final switch(m_bitDepth) {
-                    case(8): m_image = new Img!(Px.R8G8B8)(m_width, m_height); break;
-                    case(16): m_image = new Img!(Px.R16G16B16)(m_width, m_height); break;
-                }
-                break;
-            }
-            case(3): { // palette
-                m_nChannels = 1;
+            break;
+        }
+        case(2):   // rgb
+        {
+            m_nChannels = 3;
+            final switch(m_bitDepth)
+            {
+            case(8):
                 m_image = new Img!(Px.R8G8B8)(m_width, m_height);
                 break;
-            }
-            case(4): { // greyscale + alpha
-                m_nChannels = 2;
-                final switch(m_bitDepth) {
-                    case(8): m_image = new Img!(Px.L8A8)(m_width, m_height); break;
-                    case(16): m_image = new Img!(Px.L16A16)(m_width, m_height); break;
-                }
+            case(16):
+                m_image = new Img!(Px.R16G16B16)(m_width, m_height);
                 break;
             }
-            case(6): { // rgba
-                m_nChannels = 4;
-                final switch(m_bitDepth) {
-                    case(8): m_image = new Img!(Px.R8G8B8A8)(m_width, m_height); break;
-                    case(16): m_image = new Img!(Px.R16G16B16A16)(m_width, m_height); break;
-                }
+            break;
+        }
+        case(3):   // palette
+        {
+            m_nChannels = 1;
+            m_image = new Img!(Px.R8G8B8)(m_width, m_height);
+            break;
+        }
+        case(4):   // greyscale + alpha
+        {
+            m_nChannels = 2;
+            final switch(m_bitDepth)
+            {
+            case(8):
+                m_image = new Img!(Px.L8A8)(m_width, m_height);
+                break;
+            case(16):
+                m_image = new Img!(Px.L16A16)(m_width, m_height);
                 break;
             }
+            break;
+        }
+        case(6):   // rgba
+        {
+            m_nChannels = 4;
+            final switch(m_bitDepth)
+            {
+            case(8):
+                m_image = new Img!(Px.R8G8B8A8)(m_width, m_height);
+                break;
+            case(16):
+                m_image = new Img!(Px.R16G16B16A16)(m_width, m_height);
+                break;
+            }
+            break;
+        }
         }
     } // allocateImage
 
 
     // Set some state dealing with interlacing
-    void setInterlace() {
-        foreach(i; 0..m_width) {
+    void setInterlace()
+    {
+        foreach(i; 0..m_width)
+        {
             if (i % 8 == 0) m_pixPerLine[0] ++;
             if (i % 8 == 4) m_pixPerLine[1] ++;
             if (i % 8 == 0 ||
-                i % 8 == 4) m_pixPerLine[2] ++;
+                    i % 8 == 4) m_pixPerLine[2] ++;
             if (i % 8 == 2 ||
-                i % 8 == 6) m_pixPerLine[3] ++;
+                    i % 8 == 6) m_pixPerLine[3] ++;
             if (i % 8 == 0 ||
-                i % 8 == 2 ||
-                i % 8 == 4 ||
-                i % 8 == 6 ) m_pixPerLine[4] ++;
+                    i % 8 == 2 ||
+                    i % 8 == 4 ||
+                    i % 8 == 6 ) m_pixPerLine[4] ++;
             if (i % 8 == 1 ||
-                i % 8 == 3 ||
-                i % 8 == 5 ||
-                i % 8 == 7 ) m_pixPerLine[5] ++;
+                    i % 8 == 3 ||
+                    i % 8 == 5 ||
+                    i % 8 == 7 ) m_pixPerLine[5] ++;
         }
         m_pixPerLine[6] = m_width;
 
-        foreach(i; 0..m_height) {
+        foreach(i; 0..m_height)
+        {
             if (i % 8 == 0) m_scanLines[0] ++;
             if (i % 8 == 0) m_scanLines[1] ++;
             if (i % 8 == 4) m_scanLines[2] ++;
             if (i % 8 == 0 ||
-                i % 8 == 4) m_scanLines[3] ++;
+                    i % 8 == 4) m_scanLines[3] ++;
             if (i % 8 == 2 ||
-                i % 8 == 6 ) m_scanLines[4] ++;
+                    i % 8 == 6 ) m_scanLines[4] ++;
             if (i % 8 == 0 ||
-                i % 8 == 2 ||
-                i % 8 == 4 ||
-                i % 8 == 6 ) m_scanLines[5] ++;
+                    i % 8 == 2 ||
+                    i % 8 == 4 ||
+                    i % 8 == 6 ) m_scanLines[5] ++;
             if (i % 8 == 1 ||
-                i % 8 == 3 ||
-                i % 8 == 5 ||
-                i % 8 == 7 ) m_scanLines[6] ++;
+                    i % 8 == 3 ||
+                    i % 8 == 5 ||
+                    i % 8 == 7 ) m_scanLines[6] ++;
         }
     } // setInterlace
 
 
     // Uncompress the stream, apply filters, and store image
-    void uncompressStream(ubyte[] stream, bool finalize = false) {
-
+    void uncompressStream(ubyte[] stream, bool finalize = false)
+    {
         if (m_currentScanLine >= m_height || m_interlacePass >= 7)
             return;
 
         ubyte[] data;
-        if (!finalize) {
+        if (!finalize)
+        {
             data = cast(ubyte[])(zliber.uncompress(cast(void[])stream));
-        } else {
+        }
+        else
+        {
             data = cast(ubyte[])(zliber.flush());
         }
-
 
         // Number of bytes in a scanline depends on the interlace pass
         int bytesPerLine, nscanLines;
         passInfo(bytesPerLine, nscanLines);
 
         int taken = 0, takeLen = 0;
-        while (taken < data.length) {
-
+        while (taken < data.length)
+        {
             // Put data into the lower scanline first
             takeLen = bytesPerLine - scanLine2.length;
-            if (takeLen > 0 && taken + takeLen <= data.length) {
+            if (takeLen > 0 && taken + takeLen <= data.length)
+            {
                 scanLine2 ~= data[taken..taken+takeLen];
                 taken += takeLen;
-            } else if (takeLen > 0) {
+            }
+            else if (takeLen > 0)
+            {
                 scanLine2 ~= data[taken..$];
                 taken += data.length - taken;
             }
 
-            if (scanLine2.length == bytesPerLine) {
-
+            if (scanLine2.length == bytesPerLine)
+            {
                 // Have a full scanline, so filter it...
                 filter();
 
@@ -408,43 +490,53 @@ private:
 
                 // Unpack the bits if needed
                 ubyte[] sLine;
-                if (m_bitDepth < 8) {
+                if (m_bitDepth < 8)
+                {
                     sLine = unpackBits(scanLine2[1..$]);
-                } else {
+                }
+                else
+                {
                     sLine = scanLine2[1..$];
                 }
 
                 // For palette colortypes, convert scanline to RGB
-                if (m_colorType == 3) {
+                if (m_colorType == 3)
+                {
                     sLine = convertPaletteToRGB(sLine);
                     scanLineStride = 3;
                 }
 
                 // Scale the bits up to 0-255
                 if (m_colorType != 3 && m_bitDepth < 8)
-                        sLine[] *= cast(ubyte)m_pixelScale;
+                {
+                    sLine[] *= cast(ubyte)m_pixelScale;
+                }
+
 
                 // Put it into the image
-                if (m_interlace == 0) { // Not interlaced
-
+                if (m_interlace == 0)
+                {
+                    // Not interlaced
                     m_image.setRow(m_currentScanLine, sLine);
-
-                } else {
-
+                }
+                else
+                {
                     // Image is interlaced, so fill not just given pixels, but blocks of pixels
-                    with(m_ilace) {
-
+                    with(m_ilace)
+                    {
                         int pass = m_interlacePass;
                         int col = start_col[pass];
                         int i = 0; // scanline offset
 
-                        while (col < m_width) {
-
+                        while (col < m_width)
+                        {
                             auto maxY = min(block_height[pass], m_height - imageRow);
                             auto maxX = min(block_width[pass], m_width - col);
 
-                            foreach(py; 0..maxY) {
-                                foreach(px; 0..maxX) {
+                            foreach(py; 0..maxY)
+                            {
+                                foreach(px; 0..maxX)
+                                {
                                     m_image.setPixel(col + px, imageRow + py,
                                                      sLine[i..i+scanLineStride]);
                                 }
@@ -468,15 +560,21 @@ private:
                 scanLine2.clear;
 
                 if (m_interlace == 1)
+                {
                     m_ilace.imageRow += m_ilace.row_increment[m_interlacePass];
+                }
 
-                if (m_interlace == 1 && m_currentScanLine == nscanLines) {
+                if (m_interlace == 1 && m_currentScanLine == nscanLines)
+                {
                     m_currentScanLine = 0;
                     m_interlacePass ++;
 
-                    if (m_interlacePass == 7 || m_currentScanLine >= m_height) {
+                    if (m_interlacePass == 7 || m_currentScanLine >= m_height)
+                    {
                         break;
-                    } else {
+                    }
+                    else
+                    {
                         scanLine1 = new ubyte[](m_bytesPerScanline);
                         m_ilace.imageRow = m_ilace.start_row[m_interlacePass];
 
@@ -486,36 +584,38 @@ private:
                 }
             }
 
-        } // while
-
+        } // while (taken < data.length)
     } // uncompressStream
 
 
     // Calculate some per-pass info
-    void passInfo(out int bytesPerLine, out int nscanLines) {
-
+    void passInfo(out int bytesPerLine, out int nscanLines)
+    {
         bytesPerLine = 0;
         nscanLines = 0;
 
-        if (m_interlace == 1) {
-
-            if (m_bitDepth < 8) {
-
+        if (m_interlace == 1)
+        {
+            if (m_bitDepth < 8)
+            {
                 auto bitsPerLine = m_pixPerLine[m_interlacePass]*m_bitDepth;
                 bytesPerLine = bitsPerLine/8;
 
-                if (bitsPerLine % 8 > 0) {
+                if (bitsPerLine % 8 > 0)
+                {
                     bytesPerLine ++;
                 }
                 bytesPerLine ++;
-
-            } else {
+            }
+            else
+            {
                 bytesPerLine = m_pixPerLine[m_interlacePass]*m_stride + 1;
             }
 
             nscanLines = m_scanLines[m_interlacePass];
-        } else {
-
+        }
+        else
+        {
             bytesPerLine = m_bytesPerScanline;
             nscanLines = m_height;
         }
@@ -523,12 +623,15 @@ private:
 
 
     // Unpack a scanline's worth of bits into a byte array
-    ubyte[] unpackBits(ubyte[] data) {
-
+    ubyte[] unpackBits(ubyte[] data)
+    {
         int bytesPerLine = 0;
-        if (m_interlace == 0) {
+        if (m_interlace == 0)
+        {
             bytesPerLine = m_width;
-        } else {
+        }
+        else
+        {
             bytesPerLine = m_pixPerLine[m_interlacePass];
         }
 
@@ -536,9 +639,10 @@ private:
         unpacked.length = bytesPerLine;
 
         auto data_index = 0, byte_index = 0;
-        while(byte_index < bytesPerLine) {
-
-            for(int j = 0; j < 8; j += m_bitDepth) {
+        while(byte_index < bytesPerLine)
+        {
+            for(int j = 0; j < 8; j += m_bitDepth)
+            {
                 auto mask = ((1<<m_bitDepth)-1) << (8 - j - m_bitDepth);
                 auto val = ((data[data_index] & mask) >> (8 - j - m_bitDepth));
                 unpacked[byte_index] = cast(ubyte) val;
@@ -554,116 +658,130 @@ private:
 
 
     // Convert a scanline of palette values to a scanline of 8-bit RGB's
-    ubyte[] convertPaletteToRGB(ubyte[] data) {
-
+    ubyte[] convertPaletteToRGB(ubyte[] data)
+    {
         ubyte[] rgb;
         rgb.length = data.length * 3;
-        foreach(i; 0..data.length) {
+        foreach(i; 0..data.length)
+        {
             rgb[i*3] = m_palette[data[i]*3];
             rgb[i*3 + 1] = m_palette[data[i]*3 + 1];
             rgb[i*3 + 2] = m_palette[data[i]*3 + 2];
         }
-
         return rgb;
     } // convertPaletteToRGB
 
 
     // Apply filters to a scanline
-    void filter() {
-
+    void filter()
+    {
         int filterType = scanLine2[0];
 
-        switch(filterType) {
-            case(0): { // no filtering, excellent
-                break;
-            }
-            case(1): { // difference filter, using previous pixel on same scanline
-                filter1();
-                break;
-            }
-            case(2): { // difference filter, using pixel on scanline above, same column
-                filter2();
-                break;
-            }
-            case(3): { // average filter, average of pixel above and pixel to left
-                filter3();
-                break;
-            }
-            case(4): { // Paeth filter
-                filter4();
-                break;
-            }
-            default: {
-                writeln("PNG: Unhandled filter (" ~ to!string(filterType) ~ ") on scan line "
-                        ~ to!string(m_currentScanLine) ~ ", Pass: " ~ to!string(m_interlacePass));
-                break;
-            }
+        switch(filterType)
+        {
+        case(0):   // no filtering, excellent
+        {
+            break;
+        }
+        case(1):   // difference filter, using previous pixel on same scanline
+        {
+            filter1();
+            break;
+        }
+        case(2):   // difference filter, using pixel on scanline above, same column
+        {
+            filter2();
+            break;
+        }
+        case(3):   // average filter, average of pixel above and pixel to left
+        {
+            filter3();
+            break;
+        }
+        case(4):   // Paeth filter
+        {
+            filter4();
+            break;
+        }
+        default:
+        {
+            writeln("PNG: Unhandled filter (" ~ to!string(filterType) ~ ") on scan line "
+                    ~ to!string(m_currentScanLine) ~ ", Pass: " ~ to!string(m_interlacePass));
+            break;
+        }
         } // switch filterType
     }
 
 
     // Apply filter 1 to scanline (difference filter)
-    void filter1() {
-
+    void filter1()
+    {
         // Can't use vector op because results need to accumulate
-        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
+        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride)
+        {
             scanLine2[i..i+m_stride] += ( scanLine2[i-m_stride..i] );
         }
     }
 
 
     // Apply filter 2 to scanline (difference filter, using scanline above)
-    void filter2() {
+    void filter2()
+    {
         scanLine2[1..$] += scanLine1[1..$];
     }
 
 
     // Apply filter 3 to scanline (average filter)
-    void filter3() {
-
+    void filter3()
+    {
         scanLine2[1..1+m_stride] += cast(ubyte[])(scanLine1[1..1+m_stride] / 2);
 
-        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
+        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride)
+        {
             scanLine2[i..i+m_stride] += cast(ubyte[])(( scanLine2[i-m_stride..i] +
-                                                        scanLine1[i..i+m_stride] ) / 2);
+                                        scanLine1[i..i+m_stride] ) / 2);
         }
-
-
     }
 
 
     // Apply filter 4 to scanline (Paeth filter)
-    void filter4() {
-
-        int paeth(ubyte a, ubyte b, ubyte c) {
+    void filter4()
+    {
+        int paeth(ubyte a, ubyte b, ubyte c)
+        {
             int p = (a + b - c);
             int pa = abs(p - a);
             int pb = abs(p - b);
             int pc = abs(p - c);
 
             int pred = 0;
-            if ((pa <= pb) && (pa <= pc)) {
+            if ((pa <= pb) && (pa <= pc))
+            {
                 pred = a;
-            } else if (pb <= pc) {
+            }
+            else if (pb <= pc)
+            {
                 pred = b;
-            } else {
+            }
+            else
+            {
                 pred = c;
             }
             return pred;
         }
 
-
-        foreach(i; 1..m_stride+1) {
+        foreach(i; 1..m_stride+1)
+        {
             scanLine2[i] += paeth(0, scanLine1[i], 0);
         }
 
-        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride) {
-            foreach(j; 0..m_stride) {
+        for(int i=m_stride+1; i<scanLine2.length; i+=m_stride)
+        {
+            foreach(j; 0..m_stride)
+            {
                 scanLine2[i+j] += paeth(scanLine2[i+j-m_stride], scanLine1[i+j], scanLine1[i+j-m_stride]);
             }
         }
 
     } // filter4
-
-
-}
+} // Png

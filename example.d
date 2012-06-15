@@ -10,10 +10,8 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
 {
-
-
-    string filename = "testimages/pngtestsuite/basi3p04.png";
-    //string filename = "testimages/jupiter.png";
+    //string filename = "testimages/pngtestsuite/basi3p04.png";
+    string filename = "testimages/books.png";
     Image pic = load(filename);
 
     //pic.resize(pic.width/2, pic.height/2);
@@ -33,6 +31,7 @@ int main()
             int g = pix.g >> shft;
             int b = pix.b >> shft;
             int a = pix.a >> shft;
+            //a = 255;
 
             r = cast(int)((a/255.)*r + (1 - a/255.)*255);
             g = cast(int)((a/255.)*g + (1 - a/255.)*255);
