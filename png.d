@@ -142,7 +142,8 @@ private:
         m_interlace,
         m_bytesPerScanline,
         m_nChannels,
-        m_stride;
+        m_stride,
+        m_pixelScale;
 
 
 
@@ -200,18 +201,64 @@ private:
                 m_compression = segment.buffer[18];
                 m_filter = segment.buffer[19];
                 m_interlace = segment.buffer[20];
+                m_pixelScale = 1;
 
-                switch (m_colorType) {
-                    case(0): m_nChannels = 1; break; /// greyscale
-                    case(2): m_nChannels = 3; m_image = new ImageT!(3,8)(m_width, m_height); break; /// rgb
-                    case(3): m_nChannels = 1; break; /// palette
-                    case(4): m_nChannels = 2; break; /// greyscale + alpha
-                    case(6): m_nChannels = 4; m_image = new ImageT!(4,8)(m_width, m_height); break; /// rgba
-                    default: break;
+                final switch (m_colorType) {
+                    case(0): { /// greyscale
+                        m_nChannels = 1;
+                        final switch(m_bitDepth) {
+                            case(1): m_image = new Img!(Px.L1)(m_width, m_height); m_pixelScale = 255; break;
+                            case(2): m_image = new Img!(Px.L2)(m_width, m_height); m_pixelScale = 64; break;
+                            case(4): m_image = new Img!(Px.L4)(m_width, m_height); m_pixelScale = 16; break;
+                            case(8): m_image = new Img!(Px.L8)(m_width, m_height); break;
+                            case(16): m_image = new Img!(Px.L16)(m_width, m_height); break;
+                        }
+                        break;
+                    }
+                    case(2): { /// rgb
+                        m_nChannels = 3;
+                        final switch(m_bitDepth) {
+                            case(8): m_image = new Img!(Px.R8G8B8)(m_width, m_height); break;
+                            case(16): m_image = new Img!(Px.R16G16B16)(m_width, m_height); break;
+                        }
+                        break;
+                    }
+                    case(3): { /// palette
+                        m_nChannels = 1;
+                        m_image = new Img!(Px.R8G8B8)(m_width, m_height);
+                        break;
+                    }
+                    case(4): { /// greyscale + alpha
+                        m_nChannels = 2;
+                        final switch(m_bitDepth) {
+                            case(8): m_image = new Img!(Px.L8A8)(m_width, m_height); break;
+                            case(16): m_image = new Img!(Px.L16A16)(m_width, m_height); break;
+                        }
+                        break;
+                    }
+                    case(6): { /// rgba
+                        m_nChannels = 4;
+                        final switch(m_bitDepth) {
+                            case(8): m_image = new Img!(Px.R8G8B8A8)(m_width, m_height); break;
+                            case(16): m_image = new Img!(Px.R16G16B16A16)(m_width, m_height); break;
+                        }
+                        break;
+                    }
                 }
 
-                m_stride = m_nChannels*(m_bitDepth/8);
-                m_bytesPerScanline = 1 + m_width*m_stride;
+                auto bitStride = m_nChannels*m_bitDepth;
+                auto imageBitsPerLine = m_width*bitStride;
+
+                m_bytesPerScanline = 1 + imageBitsPerLine/8;
+                m_stride = bitStride/8;
+
+                if (imageBitsPerLine % 8 > 0) {
+                    m_bytesPerScanline ++;
+                    m_stride = 1;
+                }
+
+                if (m_stride == 0)
+                    m_stride = 1;
 
                 scanLine1 = new ubyte[](m_bytesPerScanline);
 
@@ -318,20 +365,12 @@ private:
             data = cast(ubyte[])(zliber.flush());
         }
 
-        /// Number of bytes in a scanline depends on the interlace pass
-        int bytesPerLine = 0;
-        int nscanLines = 0;
-        if (m_interlace == 1) {
-             bytesPerLine = m_pixPerLine[m_interlacePass]*m_stride + 1;
-             nscanLines = m_scanLines[m_interlacePass];
-        } else {
-            bytesPerLine = m_bytesPerScanline;
-            nscanLines = m_height;
-        }
+
+        // Number of bytes in a scanline depends on the interlace pass
+        int bytesPerLine, nscanLines;
+        passInfo(bytesPerLine, nscanLines);
 
         int taken = 0, takeLen = 0;
-        auto RGBref = m_image.pixels;
-
         while (taken < data.length) {
 
             /// Put data into the lower scanline first
@@ -351,37 +390,60 @@ private:
 
                 /// Put it into the image
                 if (m_interlace == 0) {
-                    int idx = m_currentScanLine*m_image.width*m_stride;
-                    RGBref[idx..idx+m_bytesPerScanline-1] = scanLine2[1..$];
+
+                    // Not interlaced, so goes straight in
+                    m_image.setRow(m_currentScanLine, scanLine2[1..$]);
+
                 } else {
 
+                    // Image is interlaced, so fill not just given pixels, but blocks of pixels
                     with(m_ilace) {
 
                         int pass = m_interlacePass;
                         int col = start_col[pass];
-                        int scanline_idx = 1;
+                        int i = 1; // scanline offset
 
                         while (col < m_width) {
 
-                            int idx = (col + imageRow*m_width)*m_stride;
+                            if (m_bitDepth < 8) {
 
-                            foreach(py; 0..min(block_height[pass], m_height - imageRow)) {
-                            foreach(px; 0..min(block_width[pass], m_width - col)) {
-                                int offset = idx + (px + py*m_width)*m_stride;
-                                //writeln(offset % m_width, ", ", offset / m_width);
-                                RGBref[offset..offset+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
+                                for(int j=0; j<8; j+=m_bitDepth) {
+
+                                    auto maxY = min(block_height[pass], m_height - imageRow);
+                                    auto maxX = min(block_width[pass], m_width - col);
+
+                                    auto mask = ((1<<m_bitDepth)-1) << (8 - j - m_bitDepth);
+                                    auto val = ((scanLine2[i] & mask) >> (8 - j - m_bitDepth));
+
+                                    foreach(py; 0..maxY) {
+                                        foreach(px; 0..maxX) {
+                                            m_image.setPixel(col + px, imageRow + py, Pixel(val,0,0,0));
+                                        }
+                                    }
+                                    col = col + col_increment[pass];
+                                }
+
+                            } else {
+
+                                auto maxY = min(block_height[pass], m_height - imageRow);
+                                auto maxX = min(block_width[pass], m_width - col);
+
+                                foreach(py; 0..maxY) {
+                                    foreach(px; 0..maxX) {
+                                        m_image.setPixel(col + px, imageRow + py,
+                                                         scanLine2[i..i+m_stride]);
+                                    }
+                                }
+                                col = col + col_increment[pass];
                             }
-                            }
 
-                            //writeln(scanline_idx, ", ", col, ", ", scanLine2.length);
+                            i += m_stride;
 
-                            //RGBref[idx..idx+m_stride] = scanLine2[scanline_idx..scanline_idx+m_stride];
-                            scanline_idx += m_stride;
-                            col = col + col_increment[pass];
-                        }
-                    }
 
-                }
+                        } // while col < m_width
+                    } // with(m_ilace)
+                } // if m_interlace
+
 
                 /// Increment scanline counter
                 m_currentScanLine ++;
@@ -403,9 +465,10 @@ private:
                         break;
                     } else {
                         scanLine1 = new ubyte[](m_bytesPerScanline);
-                        bytesPerLine = m_pixPerLine[m_interlacePass]*m_stride + 1;
-                        nscanLines = m_scanLines[m_interlacePass];
                         m_ilace.imageRow = m_ilace.start_row[m_interlacePass];
+
+                        // Recalc pass info
+                        passInfo(bytesPerLine, nscanLines);
                     }
                 }
             }
@@ -413,6 +476,37 @@ private:
         } /// while
 
     } /// uncompressStream
+
+
+    /// Calculate some per-pass info
+    void passInfo(out int bytesPerLine, out int nscanLines) {
+
+        bytesPerLine = 0;
+        nscanLines = 0;
+
+        if (m_interlace == 1) {
+
+            if (m_bitDepth < 8) {
+
+                auto bitsPerLine = m_pixPerLine[m_interlacePass]*m_bitDepth;
+                bytesPerLine = bitsPerLine/8;
+
+                if (bitsPerLine % 8 > 0) {
+                    bytesPerLine ++;
+                }
+                bytesPerLine ++;
+
+            } else {
+                bytesPerLine = m_pixPerLine[m_interlacePass]*m_stride + 1;
+            }
+
+            nscanLines = m_scanLines[m_interlacePass];
+        } else {
+
+            bytesPerLine = m_bytesPerScanline;
+            nscanLines = m_height;
+        }
+    }
 
 
     /// Apply filters to a scanline
@@ -442,7 +536,7 @@ private:
             }
             default: {
                 writeln("PNG: Unhandled filter (" ~ to!string(filterType) ~ ") on scan line "
-                        ~ to!string(m_currentScanLine));
+                        ~ to!string(m_currentScanLine) ~ ", Pass: " ~ to!string(m_interlacePass));
                 break;
             }
         } /// switch filterType

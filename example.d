@@ -10,8 +10,8 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
 {
-    //string filename = "testimages/pngtestsuite/basi0g08.png";
-    string filename = "testimages/earth.png";
+    string filename = "testimages/pngtestsuite/cs5n2c08.png";
+    //string filename = "testimages/jupiter.png";
     Image pic = load(filename);
 
     //pic.resize(pic.width/2, pic.height/2);
@@ -25,7 +25,17 @@ int main()
     foreach(x; 0..pic.width) {
         foreach(y; 0..pic.height) {
             Pixel pix = pic[x,y];
-            sd_image.putPixel(x, y, sd.Color(pix.r, pix.g, pix.b));
+
+            int shft = 0;
+            int r = pix.r >> shft;
+            int g = pix.g >> shft;
+            int b = pix.b >> shft;
+            int a = pix.a >> shft;
+
+            r = cast(int)((a/255.)*r + (1 - a/255.)*255);
+            g = cast(int)((a/255.)*g + (1 - a/255.)*255);
+            b = cast(int)((a/255.)*b + (1 - a/255.)*255);
+            sd_image.putPixel(x, y, sd.Color(r, g, b));
         }
     }
 
