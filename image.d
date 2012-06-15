@@ -33,14 +33,14 @@ Image load(string filename) {
 }
 
 
-/// Structure to report loading/decoding errors
+// Structure to report loading/decoding errors
 struct IMGError {
     string message;
     int code;
 }
 
 
-/// Container for RGBA values
+// Container for RGBA values
 struct Pixel {
     ushort r, g, b, a;
 
@@ -53,7 +53,7 @@ struct Pixel {
 }
 
 
-/// Interface for an image decoder
+// Interface for an image decoder
 abstract class Decoder {
 
     @property Image image() {return m_image; }
@@ -65,10 +65,10 @@ protected:
 }
 
 
-/// Interface for an Image
+// Interface for an Image
 interface Image {
 
-    /// Algorithm for image resizing
+    // Algorithm for image resizing
     enum ResizeAlgo {
         CROP,
         NEAREST,
@@ -88,7 +88,7 @@ interface Image {
 }
 
 
-/// Implementation for an image prameterized by number of channels and bits per channel
+// Implementation for an image prameterized by number of channels and bits per channel
 class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
     if ((N <= 4) && ((S == 1) || (S == 2) || (S == 4) || (S == 8) || (S == 16))) : Image
 {
@@ -114,14 +114,14 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
             m_data = data.dup;
     }
 
-    /// Return a copy of this image, with buffer .dup'd
+    // Return a copy of this image, with buffer .dup'd
     ImageT!(N, S) copy() {
         auto copy = new ImageT!(N, S)(m_width, m_height, true);
         copy.pixels = m_data.dup;
         return copy;
     }
 
-    /// Get the pixel at (x, y), where y is relative to the bottom of the image
+    // Get the pixel at (x, y), where y is relative to the bottom of the image
     Pixel opIndex(size_t x, size_t y) {
         uint i = xyToOffset(x,y);
 
@@ -135,7 +135,7 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
     }
 
 
-    /// Set the pixel at (x, y) to the given value
+    // Set the pixel at (x, y) to the given value
     void setPixel(size_t x, size_t y, Pixel p) {
         uint i = xyToOffset(x,y);
 
@@ -158,7 +158,7 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
         if (newWidth == m_width && newHeight == m_height)
             return false;
 
-        /// Create a delegate to define the resizing algorithm
+        // Create a delegate to define the resizing algorithm
         Pixel delegate(ImageT!(N,S), float, float, uint, uint) algorithmDelegate;
 
         if (algo == ResizeAlgo.NEAREST) {
@@ -168,33 +168,33 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
         } else if (algo == ResizeAlgo.CROP) {
             algorithmDelegate = &getCropped;
         } else {
-            return false; /// Algorithm not implemented!!
+            return false; // Algorithm not implemented!!
         }
 
-        /// Make a copy of the current image, this is the 'source'
+        // Make a copy of the current image, this is the 'source'
         auto oldImg = this.copy();
         int oldWidth = oldImg.width;
         int oldHeight = oldImg.height;
 
-        /// Allocate a new array to hold the new image
+        // Allocate a new array to hold the new image
         m_data = new ubyte[](newWidth*newHeight*m_pixelStride);
         m_width = newWidth;
         m_height = newHeight;
 
-        uint i = 0; /// 1D array index
+        uint i = 0; // 1D array index
         float x_ratio = cast(float)(oldWidth-1)/cast(float)(newWidth);
         float y_ratio = cast(float)(oldHeight-1)/cast(float)(newHeight);
 
-        /// Loop through rows and columns of the new image
+        // Loop through rows and columns of the new image
         foreach (row; 0..newHeight) {
             foreach (col; 0..newWidth) {
                 float x = x_ratio * cast(float)col;
                 float y = y_ratio * cast(float)row;
 
-                /// Use the selected algorithm to get the pixel value
+                // Use the selected algorithm to get the pixel value
                 Pixel p = algorithmDelegate(oldImg, x, y, col, row);
 
-                /// Store the new pixel
+                // Store the new pixel
                 static if (N == 1 && S == 8) {
                     m_data[i+col] = cast(ubyte)p.r;
                 } else if (N == 3 && S == 8) {
@@ -202,19 +202,19 @@ class ImageT(uint N /* N channels */, uint S /* Bits per channel */)
                 } else if (N == 4 && S == 8) {
                     m_data[(i+col)*4..(i+col)*4+4] = [cast(ubyte)p.r, cast(ubyte)p.g, cast(ubyte)p.b, cast(ubyte)p.a];
                 }
-            } /// columns
+            } // columns
             i += m_width;
         }
 
-        return true; /// successfully resized
-    } /// resize
+        return true; // successfully resized
+    } // resize
 
 
-    /// Getters
-    @property uint width() { return m_width; } /// ditto
-    @property uint height() { return m_height; } /// ditto
-    @property ref ubyte[] pixels() { return m_data; } /// ditto
-    @property ubyte* pixelsPtr() { return m_data.ptr; } /// ditto
+    // Getters
+    @property uint width() { return m_width; } // ditto
+    @property uint height() { return m_height; } // ditto
+    @property ref ubyte[] pixels() { return m_data; } // ditto
+    @property ubyte* pixelsPtr() { return m_data.ptr; } // ditto
 
 
 private:
@@ -233,7 +233,7 @@ private:
     }
 
 
-    /// Cropping algorithm - If (x,y) is in the original, return that pixel, else return 0,0,0,0
+    // Cropping algorithm - If (x,y) is in the original, return that pixel, else return 0,0,0,0
     Pixel getCropped(ImageT!(N,S) i, float x, float y, uint col, uint row) {
         if (col < i.width && row < i.height)
             return i[col, row];
@@ -242,7 +242,7 @@ private:
     }
 
 
-    /// Nearest neighbour sampling (actually just the nearest neighbour to the left and down)
+    // Nearest neighbour sampling (actually just the nearest neighbour to the left and down)
     Pixel getNearestNeighbour(ImageT!(N,S) i, float x, float y, uint col, uint row) {
         int x0 = cast(int)x;
         int y0 = cast(int)y;
@@ -258,7 +258,7 @@ private:
         int x0 = cast(int)x;
         int y0 = cast(int)y;
 
-        /// Weighting factors
+        // Weighting factors
         float fx = x - x0;
         float fy = y - y0;
         float fx1 = 1.0f - fx;
@@ -291,9 +291,18 @@ private:
     int m_channels;
     int m_bitsPerChannel;
     int m_bitsPerPixel;
-    int m_pixelStride; /// in bytes, minimum of 1
+    int m_pixelStride; // in bytes, minimum of 1
     ubyte[] m_data;
 }
+
+
+
+
+
+
+
+
+
 
 
 enum Px {
@@ -314,101 +323,222 @@ class Img(Px F) : Image {
 
     this(uint width, uint height) {
 
-        /* static */
-        switch(F) {
-            case(Px.L1): m_bitDepth = 1; m_channels = 1; break;
-            case(Px.L2): m_bitDepth = 2; m_channels = 1; break;
-            case(Px.L4): m_bitDepth = 4; m_channels = 1; break;
-            case(Px.L8): m_bitDepth = 8; m_channels = 1; break;
-            default: break;
+        static if (F == Px.L1) {
+            m_bitDepth = 1; m_channels = 1;
+        } else if (F == Px.L2) {
+            m_bitDepth = 2; m_channels = 1;
+        } else if (F == Px.L4) {
+            m_bitDepth = 4; m_channels = 1;
+        } else if (F == Px.L8) {
+            m_bitDepth = 8; m_channels = 1;
+        } else if (F == Px.L8A8) {
+            m_bitDepth = 8; m_channels = 2;
+        } else if (F == Px.L8A8) {
+            m_bitDepth = 8; m_channels = 2;
+        } else if (F == Px.R8G8B8) {
+            m_bitDepth = 8; m_channels = 3;
+        } else if (F == Px.R8G8B8A8) {
+            m_bitDepth = 8; m_channels = 4;
+        } else if (F == Px.L16) {
+            m_bitDepth = 16; m_channels = 1;
+        } else if (F == Px.L16A16) {
+            m_bitDepth = 16; m_channels = 2;
+        } else if (F == Px.R16G16B16) {
+            m_bitDepth = 16; m_channels = 3;
+        } else if (F == Px.R16G16B16A16) {
+            m_bitDepth = 16; m_channels = 4;
         }
-
-        /// Minimum # bytes needed to hold the data
-        int minBytes = cast(int) ceil(width*height*m_bitDepth*m_channels / 8.0f);
-        m_data = new ubyte[](minBytes);
 
         m_width = width;
         m_height = height;
-        m_stride = m_bitDepth*m_channels;
+        if (m_bitDepth < 8) {
+            m_stride = m_channels;
+        } else {
+            m_stride = m_bitDepth*m_channels;
+        }
+
+        // Allocate data array
+        m_data = new ubyte[](width*height*m_stride);
     }
 
 
-    /// Get the pixel at the given index
+    // Get the pixel at the given index
     Pixel opIndex(size_t x, size_t y) {
 
-        uint index = 0, offset = 0;
-        getIndexAndOffset(x, y, index, offset);
+        auto index = getIndex(x, y);
 
+        static if (F == Px.L1 ||
+                   F == Px.L2 ||
+                   F == Px.L4 ||
+                   F == Px.L8) {
+            return Pixel(m_data[index],0,0,0);
 
-        static if (F == Px.L1) {
+        } else if (F == Px.L8A8) {
+            return Pixel(m_data[index],0,0,m_data[index+1]);
 
-            int mask = ((1 << 1) - 1) << (8 - offset - 1);
-            int v = (m_data[index] & mask) >> (8 - offset - 1);
-            return Pixel(v,0,0,0);
+        } else if (F == Px.R8G8B8) {
+            return Pixel(m_data[index],m_data[index+1],m_data[index+2],0);
 
-        } else if (F == Px.L2) {
-
-            int mask = ((1 << 2) - 1) << (8 - offset - 2);
-            int v = (m_data[index] & mask) >> (8 - offset - 2);
-            return Pixel(v,0,0,0);
-
-        } else if (F == Px.L4) {
-
-            int mask = ((1 << 4) - 1) << (8 - offset - 4);
-            int v = (m_data[index] & mask) >> (8 - offset - 4);
-            return Pixel(v,0,0,0);
+        } else if (F == Px.R8G8B8A8) {
+            return Pixel(m_data[index],m_data[index+1],m_data[index+2],m_data[index+3]);
 
         } else if (F == Px.L16) {
+            int v = m_data[index] << 8 | m_data[index+1];
+            return Pixel(v,0,0,0);
 
-            return Pixel(0,0,0,0);
-        } else {
+        } else if (F == Px.L16A16) {
+            int v = m_data[index] << 8 | m_data[index+1];
+            int a = m_data[index+2] << 8 | m_data[index+3];
+            return Pixel(v,0,0,a);
 
-            return Pixel(0,0,0,0);
+        } else if (F == Px.R16G16B16) {
+            int r = m_data[index] << 8 | m_data[index+1];
+            int g = m_data[index+2] << 8 | m_data[index+3];
+            int b = m_data[index+4] << 8 | m_data[index+5];
+            return Pixel(r,g,b,0);
+
+        } else if (F == Px.R16G16B16A16) {
+            int r = m_data[index] << 8 | m_data[index+1];
+            int g = m_data[index+2] << 8 | m_data[index+3];
+            int b = m_data[index+4] << 8 | m_data[index+5];
+            int a = m_data[index+6] << 8 | m_data[index+7];
+            return Pixel(r,g,b,a);
         }
     }
 
 
-    void setPixel(size_t x, size_t y, Pixel p) {}
+    // Set the pixel at the given index
+    void setPixel(size_t x, size_t y, Pixel p) {
+
+        auto index = getIndex(x, y);
+
+        static if (F == Px.L1 ||
+                   F == Px.L2 ||
+                   F == Px.L4 ||
+                   F == Px.L8) {
+            m_data[index] = cast(ubyte)p.r;
+
+        } else if (F == Px.L8A8) {
+            m_data[index] = cast(ubyte)p.r;
+            m_data[index+1] = cast(ubyte)p.a;
+
+        } else if (F == Px.R8G8B8) {
+            m_data[index] = cast(ubyte)p.r;
+            m_data[index+1] = cast(ubyte)p.g;
+            m_data[index+2] = cast(ubyte)p.b;
+
+        } else if (F == Px.R8G8B8A8) {
+            m_data[index] = cast(ubyte)p.r;
+            m_data[index+1] = cast(ubyte)p.g;
+            m_data[index+2] = cast(ubyte)p.b;
+            m_data[index+3] = cast(ubyte)p.a;
+
+        } else if (F == Px.L16) {
+            m_data[index] = cast(ubyte)(p.r >> 8);
+            m_data[index+1] = cast(ubyte)(p.r & 0xFF);
+
+        } else if (F == Px.L16A16) {
+            m_data[index] = cast(ubyte)(p.r >> 8);
+            m_data[index+1] = cast(ubyte)(p.r & 0xFF);
+            m_data[index+2] = cast(ubyte)(p.a >> 8);
+            m_data[index+3] = cast(ubyte)(p.a & 0xFF);
+
+        } else if (F == Px.R16G16B16) {
+            m_data[index] = cast(ubyte)(p.r >> 8);
+            m_data[index+1] = cast(ubyte)(p.r & 0xFF);
+            m_data[index+2] = cast(ubyte)(p.g >> 8);
+            m_data[index+3] = cast(ubyte)(p.g & 0xFF);
+            m_data[index+4] = cast(ubyte)(p.b >> 8);
+            m_data[index+5] = cast(ubyte)(p.b & 0xFF);
+
+        } else if (F == Px.R16G16B16A16) {
+            m_data[index] = cast(ubyte)(p.r >> 8);
+            m_data[index+1] = cast(ubyte)(p.r & 0xFF);
+            m_data[index+2] = cast(ubyte)(p.g >> 8);
+            m_data[index+3] = cast(ubyte)(p.g & 0xFF);
+            m_data[index+4] = cast(ubyte)(p.b >> 8);
+            m_data[index+5] = cast(ubyte)(p.b & 0xFF);
+            m_data[index+6] = cast(ubyte)(p.a >> 8);
+            m_data[index+7] = cast(ubyte)(p.a & 0xFF);
+        }
+
+    }
+
+
+
+    // Set a whole row (scanline) of data from the given buffer. Rows count up from the bottom.
+    void setRow(uint y, ubyte[] data) {
+
+        auto takeBits = m_width*m_bitDepth*m_channels;
+        auto subBits = takeBits % 8;
+        auto index = getIndex(0, y);
+
+        debug { // Check array bounds if debug mode
+            uint reqLen = takeBits / 8;
+            if (subBits > 0) {
+                reqLen ++;
+            }
+            if (data.length < reqLen) {
+                throw new Exception("Image setRow: buffer does not have required length!");
+            }
+        }
+
+        // Normal byte packing
+        static if (F == Px.L8 ||
+                   F == Px.L8A8 ||
+                   F == Px.R8G8B8 ||
+                   F == Px.R8G8B8A8 ||
+                   F == Px.L16A16 ||
+                   F == Px.R16G16B16 ||
+                   F == Px.R16G16B16A16 ) {
+
+            m_data[index..index+(takeBits/8)] = data[0..(takeBits/8)];
+
+        } else { // Sub-byte packing, need to loop through individual bytes and unpack
+
+            foreach(bite; data) {
+                for(int i=0; i<8; i+=m_bitDepth) {
+                    int mask = ((1 << m_bitDepth) - 1) << (8 - i - m_bitDepth);
+                    m_data[index] = (bite & mask) >> (8 - i - m_bitDepth);
+                    index ++;
+                }
+            }
+        }
+    }
+
+
     Image copy() { return new Img!(F)(m_width, m_height); }
+
     bool resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST) { return true;}
 
-    /// Getters
-    @property uint width() { return m_width; } /// ditto
-    @property uint height() { return m_height; } /// ditto
-    @property ref ubyte[] pixels() { return m_data; } /// ditto
-    @property ubyte* pixelsPtr() { return m_data.ptr; } /// ditto
+    // Getters
+    @property uint width() { return m_width; } // ditto
+    @property uint height() { return m_height; } // ditto
+    @property ref ubyte[] pixels() { return m_data; } // ditto
+    @property ubyte* pixelsPtr() { return m_data.ptr; } // ditto
 
 private:
 
-    /// Get the byte index and bit offset for a given (x,y)
-    void getIndexAndOffset(size_t x, size_t y, out uint index, out uint offset) {
-
-        uint bitIndex = (x + y*m_width)*m_stride;
-        index = bitIndex/8;
-
-        /*
-        * Only calculate the bit mask required to get the value. Only
-        * necessary for sub-bit packing.
-        */
-        static if (F == Px.L1 || F == Px.L2 || F == Px.l4) {
-            offset = bitIndex % 8;
-        } else {
-            mask = uint.max;
-        }
+    // Get the byte index and bit offset for a given (x,y)
+    uint getIndex(size_t x, size_t y) {
+        return (x + y*m_width)*m_stride;
     }
 
 
     uint m_width = 0, m_height = 0;
-    int m_stride = 0; /// in bits
-    int m_index = 0; /// offset into data, in bits
+    int m_stride = 0; // in bits
+    int m_index = 0; // offset into data, in bits
     uint m_bitDepth = 0;
     uint m_channels = 0;
     ubyte[] m_data;
 }
 
+
+
 unittest {
 
     Img!(Px.L2) k = new Img!(Px.L2)(10, 10);
+    Img!(Px.R16G16B16A16) l = new Img!(Px.R16G16B16A16)(10, 10);
 
     k.pixels[0] = 1 << 3;
     writefln("%(%08b,%)", k.pixels);

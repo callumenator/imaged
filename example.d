@@ -10,8 +10,8 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
 {
-
-    string filename = "testimages/pngtestsuite/basi0g08.png";
+    //string filename = "testimages/pngtestsuite/basi0g08.png";
+    string filename = "testimages/earth.png";
     Image pic = load(filename);
 
     //pic.resize(pic.width/2, pic.height/2);
