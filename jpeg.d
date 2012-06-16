@@ -42,7 +42,7 @@ class Jpeg : Decoder
     }
 
 
-    // Empty constructor, usefule for parsing a stream manually
+    // Empty constructor, useful for parsing a stream manually
     this(bool logging = false, Upsampling algo = Upsampling.NEAREST)
     {
         m_logging = logging;
@@ -229,7 +229,6 @@ private:
     void delegate(uint cmpIndex) resampleDgt;
 
     string format = "unknown"; // File format (will only do JFIF)
-    string type = "unknown";
 
     ubyte nComponents, precision;
 
@@ -372,6 +371,7 @@ private:
             }
             break;
         }
+        // Progressive JPEG, cannot decode
         case(Marker.HuffProgressiveDCT):
         {
             m_errorState.code = 1;
