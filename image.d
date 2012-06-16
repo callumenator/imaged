@@ -8,15 +8,20 @@
 */
 module image;
 
-import std.math, std.stdio, std.traits, std.conv, std.path;
+import std.file,
+       std.math,
+       std.stdio,
+       std.conv,
+       std.path,
+       std.stream;
 
 import jpeg;
 import png;
 
 
+// Convenience function for loading from a file
 Image load(string filename)
 {
-
     Decoder dcd = null;
 
     switch(extension(filename))
@@ -51,40 +56,52 @@ struct IMGError
 }
 
 
-// Container for RGBA values
-struct Pixel
-{
-    ushort r, g, b, a = 255;
-
-    this(int r, int g, int b, int a = 255)
-    {
-        this.r = cast(ushort) r;
-        this.g = cast(ushort) g;
-        this.b = cast(ushort) b;
-        this.a = cast(ushort) a;
-    }
-}
-
-
 // Interface for an image decoder
 abstract class Decoder
 {
+    // Parse a single byte
+    void parseByte(ubyte bite);
 
-    @property Image image()
+    // Parse from the stream. Returns the amount of data left in the stream.
+    size_t parseStream(Stream stream, size_t chunkSize = 5000)
     {
-        return m_image;
+        if (!stream.readable)
+        {
+            m_errorState.code = 1;
+            m_errorState.message = "DECODER: Stream is not readable";
+            return 0;
+        }
+
+        ubyte[] buffer;
+        buffer.length = chunkSize;
+        size_t rlen = stream.readBlock(cast(void*)buffer.ptr, chunkSize*ubyte.sizeof);
+        if (rlen)
+        {
+            foreach(bite; buffer)
+            {
+                if (m_errorState.code != 0)
+                {
+                    rlen = 0;
+                    break;
+                }
+                parseByte(bite);
+            }
+        }
+        return rlen;
     }
-    @property IMGError errorState()
-    {
-        return m_errorState;
-    }
+
+    // Getters
+    @property Image image() { return m_image; }
+    @property IMGError errorState() { return m_errorState; } // ditto
 
 protected:
+    bool m_logging = false; // if true, will emit logs when in debug mode
     IMGError m_errorState;
     Image m_image;
 }
 
 
+// Currently allowed pixel formats
 enum Px
 {
     L8,
@@ -98,10 +115,28 @@ enum Px
 }
 
 
+// Container for RGBA values
+struct Pixel
+{
+    /**
+    * Note that alpha defaults to opaque for _8 bit_ formats.
+    * For 16 bit formats, be aware of this.
+    */
+    ushort r, g, b, a = 255;
+
+    this(int r, int g, int b, int a = 255)
+    {
+        this.r = cast(ushort) r;
+        this.g = cast(ushort) g;
+        this.b = cast(ushort) b;
+        this.a = cast(ushort) a;
+    }
+}
+
+
 // Interface for an Image
 interface Image
 {
-
     // Algorithm for image resizing
     enum ResizeAlgo {
         CROP,
@@ -110,21 +145,37 @@ interface Image
         BICUBIC
     }
 
+    // Overload index operator to return pixel at (x,y) coords (y is measured from the top down)
     Pixel opIndex(size_t x, size_t y, bool scaleToByte = true);
+
+    // Simply calls opIndex
     Pixel getPixel(size_t x, size_t y, bool scaleToByte = true);
+
+    // Set the pixel at (x,y) from the given Pixel
     void setPixel(size_t x, size_t y, Pixel p);
+
+    // Set the pixel at (x,y) from the given ubyte array
     void setPixel(size_t x, size_t y, const(ubyte[]) data);
+
+    // Set a complete row of the image, from the supplied buffer
     void setRow(size_t y, const(ubyte[]) data);
+
+    // Return a copy of the current image
     Image copy();
+
+    // Resize the image, either by cropping, nearest neighbor or bilinear algorithms
     bool resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST);
 
+    // Getters
     @property uint width();
-    @property uint height();
-    @property int stride();
-    @property ref ubyte[] pixels();
-    @property ubyte* pixelsPtr();
+    @property uint height(); // ditto
+    @property int stride(); // ditto
+    @property ref ubyte[] pixels(); // ditto
+    @property ubyte* pixelsPtr(); // ditto
 }
 
+
+// The image class backend, parameterized by pixel format
 class Img(Px F) : Image
 {
     this(uint width, uint height)

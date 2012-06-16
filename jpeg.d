@@ -12,7 +12,8 @@ import std.file,
        std.stdio,
        std.math,
        std.algorithm,
-       std.conv;
+       std.conv,
+       std.stream;
 
 import image;
 
@@ -41,9 +42,8 @@ class Jpeg : Decoder
     }
 
 
-    // Construct with a filename, and parse data
-    this(string filename, bool logging = false,
-         Upsampling algo = Upsampling.NEAREST)
+    // Empty constructor, usefule for parsing a stream manually
+    this(bool logging = false, Upsampling algo = Upsampling.NEAREST)
     {
         m_logging = logging;
 
@@ -56,29 +56,35 @@ class Jpeg : Decoder
         {
             resampleDgt = &bilinearResample;
         }
+    }
+
+    // Constructor taking a filename
+    this(string filename, bool logging = false, Upsampling algo = Upsampling.NEAREST)
+    {
+        this(logging, algo);
 
         // Loop through the image data
         auto data = cast(ubyte[]) read(filename);
         foreach (bite; data)
         {
-            if (errorState.code == 0)
+            if (m_errorState.code == 0)
             {
-                parse(bite);
+                parseByte(bite);
             }
             else
             {
                 debug
                 {
-                    writeln("ERROR: ", errorState.message);
+                    if (m_logging) writeln("IMAGE ERROR: ", m_errorState.message);
                 }
                 break;
             }
         }
-    }
+    } // c'tor
 
 
     // Parse a single byte
-    void parse(ubyte bite)
+    void parseByte(ubyte bite)
     {
         segment.buffer ~= bite;
 

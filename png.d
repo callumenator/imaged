@@ -13,7 +13,8 @@ import std.file,
        std.math,
        std.algorithm,
        std.conv,
-       std.zlib;
+       std.zlib,
+       std.stream;
 
 
 
@@ -34,32 +35,39 @@ class Png : Decoder
         IEND // end of image
     }
 
-    // Construct with a filename, and parse data
-    this(string filename)
+    // Empty constructor, usefule for parsing a stream manually
+    this(bool logging = false)
     {
+        m_logging = logging;
         zliber = new UnCompress();
+    }
+
+    // Constructor taking a filename
+    this(string filename, bool logging = false)
+    {
+        this(logging);
 
         // Loop through the image data
         auto data = cast(ubyte[]) read(filename);
         foreach (bite; data)
         {
-            if (errorState.code == 0)
+            if (m_errorState.code == 0)
             {
-                parse(bite);
+                parseByte(bite);
             }
             else
             {
                 debug
                 {
-                    writeln("ERROR: ", errorState.message);
+                    if (m_logging) writeln("IMAGE ERROR: ", m_errorState.message);
                 }
                 break;
             }
         }
-    }
+    } // c'tor
 
 
-    void parse(ubyte bite)
+    void parseByte(ubyte bite)
     {
         segment.buffer ~= bite;
 
@@ -77,7 +85,6 @@ class Png : Decoder
                 // Not a valid png
                 m_errorState.code = 1;
                 m_errorState.message = "Header does not match PNG type!";
-                writefln("%(%02x %)", segment.buffer);
                 return;
             }
         }
@@ -105,19 +112,31 @@ class Png : Decoder
             {
                 segment.chunkType = Chunk.IEND;
             }
-            else
-            {
-
-            }
         }
 
-        if (m_haveHeader && !m_pendingChunk && (segment.buffer.length == segment.chunkLength + 8 + 4))
+        if (segment.chunkType != Chunk.IDAT)
         {
-            processChunk();
-
-            m_previousChunk = segment.chunkType;
-            m_pendingChunk = true;
-            segment = PNGSegment();
+            if (m_haveHeader && !m_pendingChunk && (segment.buffer.length == segment.chunkLength + 8 + 4))
+            {
+                processChunk();
+                m_previousChunk = segment.chunkType;
+                m_pendingChunk = true;
+                segment = PNGSegment();
+            }
+        }
+        else
+        {
+            if (segment.buffer.length > 8 && segment.buffer.length <= segment.chunkLength + 8)
+            {
+                uncompressStream([bite]);
+            }
+            else if (segment.buffer.length == segment.chunkLength + 8 + 4)
+            {
+                processChunk();
+                m_previousChunk = segment.chunkType;
+                m_pendingChunk = true;
+                segment = PNGSegment();
+            }
         }
 
         m_totalBytesParsed ++;
@@ -163,14 +182,14 @@ private:
 
     int m_width, m_height;
     int m_bitDepth,
-    m_colorType,
-    m_compression,
-    m_filter,
-    m_interlace,
-    m_bytesPerScanline,
-    m_nChannels,
-    m_stride,
-    m_pixelScale;
+        m_colorType,
+        m_compression,
+        m_filter,
+        m_interlace,
+        m_bytesPerScanline,
+        m_nChannels,
+        m_stride,
+        m_pixelScale;
 
     ubyte[] m_palette;
 
@@ -202,7 +221,7 @@ private:
 
         debug
         {
-            //writeln("PNG ProcessChunk: Processing " ~ to!string(segment.chunkType));
+            if (m_logging) writeln("PNG ProcessChunk: Processing " ~ to!string(segment.chunkType));
         }
 
         // Compare checksums, but let chunk types determine how to handle failed checks
@@ -263,10 +282,13 @@ private:
 
             debug
             {
-                writefln("Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
-                "Compression: %s\nFilter: %s\nInterlacing: %s\nStride: %s",
-                m_width, m_height, m_bitDepth, m_colorType,
-                m_compression, m_filter, m_interlace, m_stride);
+                if (m_logging)
+                {
+                    writefln("PNG\n Width: %s\nHeight: %s\nBitDepth: %s\nColorType: %s\n"
+                             "Compression: %s\nFilter: %s\nInterlacing: %s\nStride: %s",
+                             m_width, m_height, m_bitDepth, m_colorType,
+                             m_compression, m_filter, m_interlace, m_stride);
+                }
             }
             break;
         }
@@ -280,8 +302,6 @@ private:
                 errorState.message = "PNG: Checksum failed in IDAT!";
                 return;
             }
-
-            uncompressStream(segment.buffer[8..$-4]);
             break;
         }
 
@@ -313,7 +333,7 @@ private:
         {
             debug
             {
-                writeln("PNG ProcessChunk: Un-handled chunk " ~ to!string(segment.chunkType));
+                if (m_logging) writeln("PNG ProcessChunk: Un-handled chunk " ~ to!string(segment.chunkType));
             }
             break;
         }
@@ -722,8 +742,11 @@ private:
         }
         default:
         {
-            writeln("PNG: Unhandled filter (" ~ to!string(filterType) ~ ") on scan line "
-                    ~ to!string(m_currentScanLine) ~ ", Pass: " ~ to!string(m_interlacePass));
+            if (m_logging)
+            {
+                writeln("PNG: Unhandled filter (" ~ to!string(filterType) ~ ") on scan line "
+                        ~ to!string(m_currentScanLine) ~ ", Pass: " ~ to!string(m_interlacePass));
+            }
             break;
         }
         } // switch filterType
