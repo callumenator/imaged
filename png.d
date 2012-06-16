@@ -35,6 +35,7 @@ class Png : Decoder
         IEND // end of image
     }
 
+
     // Empty constructor, usefule for parsing a stream manually
     this(bool logging = false)
     {
@@ -42,31 +43,17 @@ class Png : Decoder
         zliber = new UnCompress();
     }
 
+
     // Constructor taking a filename
     this(string filename, bool logging = false)
     {
         this(logging);
+        parseFile(filename);
 
-        // Loop through the image data
-        auto data = cast(ubyte[]) read(filename);
-        foreach (bite; data)
-        {
-            if (m_errorState.code == 0)
-            {
-                parseByte(bite);
-            }
-            else
-            {
-                debug
-                {
-                    if (m_logging) writeln("IMAGE ERROR: ", m_errorState.message);
-                }
-                break;
-            }
-        }
     } // c'tor
 
 
+    // Parse one byte
     void parseByte(ubyte bite)
     {
         segment.buffer ~= bite;
@@ -140,7 +127,7 @@ class Png : Decoder
         }
 
         m_totalBytesParsed ++;
-    } // parse
+    } // parseByte
 
 
 private:

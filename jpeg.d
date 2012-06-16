@@ -58,28 +58,12 @@ class Jpeg : Decoder
         }
     }
 
+
     // Constructor taking a filename
     this(string filename, bool logging = false, Upsampling algo = Upsampling.NEAREST)
     {
         this(logging, algo);
-
-        // Loop through the image data
-        auto data = cast(ubyte[]) read(filename);
-        foreach (bite; data)
-        {
-            if (m_errorState.code == 0)
-            {
-                parseByte(bite);
-            }
-            else
-            {
-                debug
-                {
-                    if (m_logging) writeln("IMAGE ERROR: ", m_errorState.message);
-                }
-                break;
-            }
-        }
+        parseFile(filename);
     } // c'tor
 
 

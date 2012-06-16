@@ -22,20 +22,7 @@ import png;
 // Convenience function for loading from a file
 Image load(string filename)
 {
-    Decoder dcd = null;
-
-    switch(extension(filename))
-    {
-    case(".jpg"):
-    case(".jpeg"):
-        dcd = new Jpeg(filename);
-        break;
-    case(".png"):
-        dcd = new Png(filename);
-        break;
-    default:
-        writeln("Imaged: no loader for extension " ~ extension(filename));
-    }
+    Decoder dcd = getDecoder(filename);
 
     if (dcd is null)
     {
@@ -43,8 +30,25 @@ Image load(string filename)
     }
     else
     {
+        dcd.parseFile(filename);
         return dcd.image;
     }
+}
+
+
+// Convenience function for getting a decoder for a given filename
+Decoder getDecoder(string filename)
+{
+    Decoder dcd = null;
+
+    switch(extension(filename))
+    {
+    case(".jpg"):
+    case(".jpeg"): dcd = new Jpeg(); break;
+    case(".png"):  dcd = new Png();  break;
+    default: writeln("Imaged: no loader for extension " ~ extension(filename));
+    }
+    return dcd;
 }
 
 
@@ -62,8 +66,32 @@ abstract class Decoder
     // Parse a single byte
     void parseByte(ubyte bite);
 
+
+    // Parse a file directly
+    void parseFile(string filename)
+    {
+        // Loop through the image data
+        auto data = cast(ubyte[]) read(filename);
+        foreach (bite; data)
+        {
+            if (m_errorState.code == 0)
+            {
+                parseByte(bite);
+            }
+            else
+            {
+                debug
+                {
+                    if (m_logging) writeln("IMAGE ERROR: ", m_errorState.message);
+                }
+                break;
+            }
+        }
+    } // parseFile
+
+
     // Parse from the stream. Returns the amount of data left in the stream.
-    size_t parseStream(Stream stream, size_t chunkSize = 5000)
+    size_t parseStream(Stream stream, size_t chunkSize = 50000)
     {
         if (!stream.readable)
         {
