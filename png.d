@@ -8,8 +8,14 @@
 */
 module png;
 
-import std.string, std.file, std.stdio, std.math,
-std.range, std.algorithm, std.conv, std.zlib, std.bitmanip;
+import std.file,
+       std.stdio,
+       std.math,
+       std.algorithm,
+       std.conv,
+       std.zlib;
+
+
 
 import image;
 
@@ -318,12 +324,12 @@ private:
     // Allocate the image
     void allocateImage()
     {
-        final switch (m_colorType)
+        switch (m_colorType)
         {
         case(0):   // greyscale
         {
             m_nChannels = 1;
-            final switch(m_bitDepth)
+            switch(m_bitDepth)
             {
             case(1):
                 m_image = new Img!(Px.L8)(m_width, m_height);
@@ -343,13 +349,16 @@ private:
             case(16):
                 m_image = new Img!(Px.L16)(m_width, m_height);
                 break;
+            default:
+                m_errorState.code = 1;
+                m_errorState.message = "PNG: Greyscale image with incorrect bit depth detected";
             }
             break;
         }
         case(2):   // rgb
         {
             m_nChannels = 3;
-            final switch(m_bitDepth)
+            switch(m_bitDepth)
             {
             case(8):
                 m_image = new Img!(Px.R8G8B8)(m_width, m_height);
@@ -357,6 +366,9 @@ private:
             case(16):
                 m_image = new Img!(Px.R16G16B16)(m_width, m_height);
                 break;
+            default:
+                m_errorState.code = 1;
+                m_errorState.message = "PNG: RGB image with incorrect bit depth detected";
             }
             break;
         }
@@ -369,7 +381,7 @@ private:
         case(4):   // greyscale + alpha
         {
             m_nChannels = 2;
-            final switch(m_bitDepth)
+            switch(m_bitDepth)
             {
             case(8):
                 m_image = new Img!(Px.L8A8)(m_width, m_height);
@@ -377,13 +389,16 @@ private:
             case(16):
                 m_image = new Img!(Px.L16A16)(m_width, m_height);
                 break;
+            default:
+                m_errorState.code = 1;
+                m_errorState.message = "PNG: Greysca;+alpha with incorrect bit depth detected";
             }
             break;
         }
         case(6):   // rgba
         {
             m_nChannels = 4;
-            final switch(m_bitDepth)
+            switch(m_bitDepth)
             {
             case(8):
                 m_image = new Img!(Px.R8G8B8A8)(m_width, m_height);
@@ -391,9 +406,15 @@ private:
             case(16):
                 m_image = new Img!(Px.R16G16B16A16)(m_width, m_height);
                 break;
+            default:
+                m_errorState.code = 1;
+                m_errorState.message = "PNG: RGBA image with incorrect bit depth detected";
             }
             break;
         }
+        default: // error
+            m_errorState.code = 1;
+            m_errorState.message = "PNG: Incorrect color type detected";
         }
     } // allocateImage
 

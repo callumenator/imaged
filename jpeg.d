@@ -8,11 +8,13 @@
 */
 module jpeg;
 
-import std.string, std.file, std.stdio, std.math,
-std.range, std.algorithm, std.conv, std.datetime;
+import std.file,
+       std.stdio,
+       std.math,
+       std.algorithm,
+       std.conv;
 
 import image;
-
 
 // Clamp an integer to 0-255 (ubyte)
 ubyte clamp(const int x)
@@ -41,11 +43,9 @@ class Jpeg : Decoder
 
     // Construct with a filename, and parse data
     this(string filename, bool logging = false,
-         bool profiling = false,
          Upsampling algo = Upsampling.NEAREST)
     {
         m_logging = logging;
-        m_profiling = profiling;
 
         // Set the resampling algorithm delegate
         if (algo == Upsampling.NEAREST)
@@ -299,14 +299,6 @@ private:
     JPGSegment segment;
 
     bool m_logging;
-    bool m_profiling;
-
-    debug
-    {
-        StopWatch m_timer;
-        bool m_inScanFlag;
-    }
-
     short x, y;
 
     // Process a segment header
@@ -393,11 +385,6 @@ private:
         // Huffman Table Definition, the mapping between bitcodes and Huffman codes
         case(Marker.HuffmanTableDef):
         {
-            debug
-            {
-                if (m_profiling) m_timer.start();
-            }
-
             int i = 2;
             while (i < segment.buffer.length)
             {
@@ -433,15 +420,6 @@ private:
                         i ++;
                     }
                 } // while storedCodes != totalCodes
-            }
-
-            debug
-            {
-                if (m_profiling)
-                {
-                    m_timer.stop();
-                    writeln("JPEG Prof: Huffman Def - ", m_timer.peek().msecs);
-                }
             }
             break;
         }

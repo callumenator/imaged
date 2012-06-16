@@ -110,7 +110,8 @@ interface Image
         BICUBIC
     }
 
-    Pixel opIndex(size_t x, size_t y);
+    Pixel opIndex(size_t x, size_t y, bool scaleToByte = true);
+    Pixel getPixel(size_t x, size_t y, bool scaleToByte = true);
     void setPixel(size_t x, size_t y, Pixel p);
     void setPixel(size_t x, size_t y, const(ubyte[]) data);
     void setRow(size_t y, const(ubyte[]) data);
@@ -183,10 +184,13 @@ class Img(Px F) : Image
     }
 
 
-    // Get the pixel at the given index
-    Pixel opIndex(size_t x, size_t y)
+    /**
+    * Get the pixel at the given index. If scaleToByte is set,
+    * 16 bit formats will only return the high bytes, effectively
+    * reducing precision to 8bit.
+    */
+    Pixel opIndex(size_t x, size_t y, bool scaleToByte = true)
     {
-
         auto index = getIndex(x, y);
 
         static if (F == Px.L8)
@@ -209,30 +213,78 @@ class Img(Px F) : Image
         }
         else if (F == Px.L16)
         {
-            int v = m_data[index] << 8 | m_data[index+1];
-            return Pixel(v,v,v,ushort.max);
+            int v;
+            if (scaleToByte)
+            {
+                v = m_data[index];
+                return Pixel(v,v,v,ubyte.max);
+            }
+            else
+            {
+                v = m_data[index] << 8 | m_data[index+1];
+                return Pixel(v,v,v,ushort.max);
+            }
+
         }
         else if (F == Px.L16A16)
         {
-            int v = m_data[index] << 8 | m_data[index+1];
-            int a = m_data[index+2] << 8 | m_data[index+3];
+            int v, a;
+            if (scaleToByte)
+            {
+                v = m_data[index];
+                a = m_data[index+2];
+            }
+            else
+            {
+                v = m_data[index] << 8 | m_data[index+1];
+                a = m_data[index+2] << 8 | m_data[index+3];
+            }
             return Pixel(v,v,v,a);
         }
         else if (F == Px.R16G16B16)
         {
-            int r = m_data[index] << 8 | m_data[index+1];
-            int g = m_data[index+2] << 8 | m_data[index+3];
-            int b = m_data[index+4] << 8 | m_data[index+5];
-            return Pixel(r,g,b,ushort.max);
+            int r, g, b;
+            if (scaleToByte)
+            {
+                r = m_data[index];
+                g = m_data[index+2];
+                b = m_data[index+4];
+                return Pixel(r,g,b,ubyte.max);
+            }
+            else
+            {
+                r = m_data[index] << 8 | m_data[index+1];
+                g = m_data[index+2] << 8 | m_data[index+3];
+                b = m_data[index+4] << 8 | m_data[index+5];
+                return Pixel(r,g,b,ushort.max);
+            }
         }
         else if (F == Px.R16G16B16A16)
         {
-            int r = m_data[index] << 8 | m_data[index+1];
-            int g = m_data[index+2] << 8 | m_data[index+3];
-            int b = m_data[index+4] << 8 | m_data[index+5];
-            int a = m_data[index+6] << 8 | m_data[index+7];
+            int r, g, b, a;
+            if (scaleToByte)
+            {
+                r = m_data[index];
+                g = m_data[index+2];
+                b = m_data[index+4];
+                a = m_data[index+6];
+            }
+            else
+            {
+                r = m_data[index] << 8 | m_data[index+1];
+                g = m_data[index+2] << 8 | m_data[index+3];
+                b = m_data[index+4] << 8 | m_data[index+5];
+                a = m_data[index+6] << 8 | m_data[index+7];
+            }
             return Pixel(r,g,b,a);
         }
+    }
+
+
+    // Simply a different way of calling opIndex
+    Pixel getPixel(size_t x, size_t y, bool scaleToByte = true)
+    {
+        return this[x,y,scaleToByte];
     }
 
 
@@ -396,6 +448,12 @@ class Img(Px F) : Image
             return true;
         }
 
+        // If old dimensions are 1x1, and algo is BILINEAR, switch to NEAREST
+        if ((m_width == 1 || m_height == 1) && algo == ResizeAlgo.BILINEAR)
+        {
+            algo = ResizeAlgo.NEAREST;
+        }
+
         // Create a delegate to define the resizing algorithm
         ushort[4] delegate(Img!F, float, float, uint, uint) algorithmDelegate;
 
@@ -459,20 +517,20 @@ class Img(Px F) : Image
                 else if (F == Px.L16A16)
                 {
                     m_data[(i+col)*m_stride..(i+col + 1)*m_stride] = [p[0] >> 8, p[0] & 0xFF,
-                                                                      p[3] >> 8, p[3] & 0xFF];
+                            p[3] >> 8, p[3] & 0xFF];
                 }
                 else if (F == Px.R16G16B16)
                 {
                     m_data[(i+col)*m_stride..(i+col + 1)*m_stride] = [p[0] >> 8, p[0] & 0xFF,
-                                                                      p[1] >> 8, p[1] & 0xFF,
-                                                                      p[2] >> 8, p[2] & 0xFF];
+                            p[1] >> 8, p[1] & 0xFF,
+                            p[2] >> 8, p[2] & 0xFF];
                 }
                 else if (F == Px.R16G16B16A16)
                 {
                     m_data[(i+col)*m_stride..(i+col + 1)*m_stride] = [p[0] >> 8, p[0] & 0xFF,
-                                                                      p[1] >> 8, p[1] & 0xFF,
-                                                                      p[2] >> 8, p[2] & 0xFF,
-                                                                      p[3] >> 8, p[3] & 0xFF];
+                            p[1] >> 8, p[1] & 0xFF,
+                            p[2] >> 8, p[2] & 0xFF,
+                            p[3] >> 8, p[3] & 0xFF];
                 }
 
             } // columns
@@ -520,7 +578,7 @@ private:
         Pixel p;
         if (col < i.width && row < i.height)
         {
-            p = i[col, row];
+            p = i[col, row, false];
         }
         else
         {
@@ -535,7 +593,7 @@ private:
     {
         int x0 = cast(int)x;
         int y0 = cast(int)y;
-        Pixel p = i[x0, y0];
+        Pixel p = i[x0, y0, false];
         return [p.r, p.g, p.b, p.a];
     }
 
@@ -559,10 +617,10 @@ private:
         * | (row,col) |
         * 00 ------- 10
         */
-        Pixel p1 = i[x0, y0];
-        Pixel p2 = i[x0+1, y0];
-        Pixel p3 = i[x0, y0+1];
-        Pixel p4 = i[x0+1, y0+1];
+        Pixel p1 = i[x0, y0, false];
+        Pixel p2 = i[x0+1, y0, false];
+        Pixel p3 = i[x0, y0+1, false];
+        Pixel p4 = i[x0+1, y0+1, false];
 
         int wgt1 = cast(int)(fx1 * fy1 * 256.0f);
         int wgt2 = cast(int)(fx  * fy1 * 256.0f);
