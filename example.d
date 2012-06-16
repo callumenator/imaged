@@ -10,9 +10,7 @@ import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
 {
-    auto dFiles = dirEntries("testimages/pngtestsuite/","*.png",SpanMode.depth);
-    while(dFiles.front.name != "testimages/pngtestsuite/s01i3p01.png")
-        dFiles.popFront;
+    auto dFiles = dirEntries("testimages/","*",SpanMode.depth);
 
         /// Make a window and simpledisplay image
         sd.SimpleWindow wnd = new sd.SimpleWindow(320, 320);

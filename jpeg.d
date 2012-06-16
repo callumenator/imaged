@@ -382,6 +382,12 @@ private:
             }
             break;
         }
+        case(Marker.HuffProgressiveDCT):
+        {
+            m_errorState.code = 1;
+            m_errorState.message = "JPG: Progressive JPEG detected, unable to load";
+            break;
+        }
         // Huffman Table Definition, the mapping between bitcodes and Huffman codes
         case(Marker.HuffmanTableDef):
         {
