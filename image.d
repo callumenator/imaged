@@ -20,9 +20,9 @@ import png;
 
 
 // Convenience function for loading from a file
-Image load(string filename)
+Image load(string filename, bool logging = false, ref IMGError err = IMGError())
 {
-    Decoder dcd = getDecoder(filename);
+    Decoder dcd = getDecoder(filename, logging);
 
     if (dcd is null)
     {
@@ -30,6 +30,7 @@ Image load(string filename)
     }
     else
     {
+        err = dcd.errorState;
         dcd.parseFile(filename);
         return dcd.image;
     }
@@ -37,18 +38,31 @@ Image load(string filename)
 
 
 // Convenience function for getting a decoder for a given filename
-Decoder getDecoder(string filename)
+Decoder getDecoder(string filename, bool logging = false)
 {
     Decoder dcd = null;
 
     switch(extension(filename))
     {
-    case(".jpg"):
-    case(".jpeg"): dcd = new Jpeg(); break;
-    case(".png"):  dcd = new Png();  break;
+    case ".jpg":
+    case ".jpeg": dcd = new JpegDecoder(logging); break;
+    case ".png":  dcd = new PngDecoder(logging);  break;
     default: writeln("Imaged: no loader for extension " ~ extension(filename));
     }
     return dcd;
+}
+
+// Convenience function for getting an encoder for a given filename
+Encoder getEncoder(string filename)
+{
+    Encoder enc = null;
+
+    switch(extension(filename))
+    {
+    case ".png":  enc = new PngEncoder();  break;
+    default: writeln("Imaged: no loader for extension " ~ extension(filename));
+    }
+    return enc;
 }
 
 
@@ -91,7 +105,7 @@ abstract class Decoder
 
 
     // Parse from the stream. Returns the amount of data left in the stream.
-    size_t parseStream(Stream stream, size_t chunkSize = 50000)
+    size_t parseStream(Stream stream, size_t chunkSize = 100000)
     {
         if (!stream.readable)
         {
@@ -129,6 +143,13 @@ protected:
 }
 
 
+// Interface for an image encoder
+abstract class Encoder
+{
+    bool write(Image img, string filename);
+}
+
+
 // Currently allowed pixel formats
 enum Px
 {
@@ -140,6 +161,15 @@ enum Px
     L16A16,
     R16G16B16,
     R16G16B16A16
+}
+
+// Enumerate the image formats
+enum ImageFormat
+{
+    GETFROMEXTENSION,
+    PNG,
+    JPG,
+    JPEG
 }
 
 
@@ -194,10 +224,15 @@ interface Image
     // Resize the image, either by cropping, nearest neighbor or bilinear algorithms
     bool resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST);
 
+    // Write image to disk as
+    bool write(string filename, ImageFormat fmt = ImageFormat.GETFROMEXTENSION);
+
     // Getters
-    @property uint width();
-    @property uint height(); // ditto
-    @property int stride(); // ditto
+    @property const uint width();
+    @property const uint height(); // ditto
+    @property const int stride(); // ditto
+    @property const uint bitDepth(); // ditto
+    @property Px pixelFormat(); // ditto
     @property ref ubyte[] pixels(); // ditto
     @property ubyte* pixelsPtr(); // ditto
 }
@@ -206,7 +241,7 @@ interface Image
 // The image class backend, parameterized by pixel format
 class Img(Px F) : Image
 {
-    this(uint width, uint height)
+    this(uint width, uint height, bool noAlloc = false)
     {
         static if (F == Px.L8)
         {
@@ -259,7 +294,16 @@ class Img(Px F) : Image
         m_stride = (m_bitDepth/8)*m_channels;
 
         // Allocate data array
-        m_data = new ubyte[](width*height*m_stride);
+        if (!noAlloc)
+            m_data = new ubyte[](width*height*m_stride);
+    }
+
+
+    // Create an image using a pre-existing buffer
+    this(uint width, uint height, ubyte[] data)
+    {
+        this(width, height, true);
+        m_data = data;
     }
 
 
@@ -431,7 +475,6 @@ class Img(Px F) : Image
     // Set the pixel at the given index
     void setPixel(size_t x, size_t y, const(ubyte[]) data)
     {
-
         auto index = getIndex(x, y);
 
         static if (F == Px.L8)
@@ -619,30 +662,40 @@ class Img(Px F) : Image
         return true; // successfully resized
     } // resize
 
+    /**
+    * Write this image to disk with the given filename. Format can be inferred from
+    * filename extension by default, or supplied explicitly.
+    */
+    bool write(string filename, ImageFormat fmt = ImageFormat.GETFROMEXTENSION)
+    {
+        Encoder enc;
+        if (fmt == ImageFormat.GETFROMEXTENSION)
+        {
+            enc = getEncoder(filename);
+        }
+        else if (fmt == ImageFormat.PNG)
+        {
+            enc = new PngEncoder();
+        }
+
+        if (enc is null)
+            return false;
+        else
+            return enc.write(this, filename);
+    }
+
+
     // Getters
-    @property uint width()
-    {
-        return m_width;    // ditto
-    }
-    @property uint height()
-    {
-        return m_height;    // ditto
-    }
-    @property int stride()
-    {
-        return m_stride;    // ditto
-    }
-    @property ref ubyte[] pixels()
-    {
-        return m_data;    // ditto
-    }
-    @property ubyte* pixelsPtr()
-    {
-        return m_data.ptr;    // ditto
-    }
+    @property uint width() { return m_width; } // ditto
+    @property uint height() { return m_height; } // ditto
+    @property int stride() { return m_stride; } // ditto
+    @property uint bitDepth() { return m_bitDepth; } // ditto
+    @property Px pixelFormat() { return F; } // ditto
+    @property ref ubyte[] pixels() { return m_data; } // ditto
+    @property ubyte* pixelsPtr() { return m_data.ptr; } // ditto
+
 
 private:
-
 
     // Get the byte index and bit offset for a given (x,y)
     uint getIndex(size_t x, size_t y)

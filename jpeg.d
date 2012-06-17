@@ -28,7 +28,7 @@ ubyte clamp(const int x)
 * Jpeg class, which handles decoding. Great reference for baseline JPEG
 * deconding: http://www.opennet.ru/docs/formats/jpeg.txt.
 */
-class Jpeg : Decoder
+class JpegDecoder : Decoder
 {
 
     /**
@@ -300,7 +300,7 @@ private:
         switch(currentMarker)
         {
         // Comment segment
-        case(Marker.Comment):
+        case Marker.Comment:
         {
             comment = cast(char[])segment.buffer[2..$];
 
@@ -311,7 +311,7 @@ private:
             break;
         }
         // App0, indicates JFIF format
-        case(Marker.App0):
+        case Marker.App0:
         {
             if (previousMarker == Marker.StartOfImage)
             {
@@ -320,7 +320,7 @@ private:
             break;
         }
         // Restart interval definition
-        case(Marker.RestartIntervalDef):
+        case Marker.RestartIntervalDef:
         {
             scState.restartInterval = cast(int) (segment.buffer[2] << 8 | segment.buffer[3]);
 
@@ -331,7 +331,7 @@ private:
             break;
         }
         // A quantization table definition
-        case(Marker.QuantTableDef):
+        case Marker.QuantTableDef:
         {
             for (int i = 2; i < segment.buffer.length; i += 65)
             {
@@ -347,7 +347,7 @@ private:
             break;
         }
         // Baseline frame
-        case(Marker.HuffBaselineDCT):
+        case Marker.HuffBaselineDCT:
         {
             ubyte precision = segment.buffer[2];
             y = cast(short) (segment.buffer[3] << 8 | segment.buffer[4]);
@@ -372,14 +372,14 @@ private:
             break;
         }
         // Progressive JPEG, cannot decode
-        case(Marker.HuffProgressiveDCT):
+        case Marker.HuffProgressiveDCT:
         {
             m_errorState.code = 1;
             m_errorState.message = "JPG: Progressive JPEG detected, unable to load";
             break;
         }
         // Huffman Table Definition, the mapping between bitcodes and Huffman codes
-        case(Marker.HuffmanTableDef):
+        case Marker.HuffmanTableDef:
         {
             int i = 2;
             while (i < segment.buffer.length)
@@ -420,7 +420,7 @@ private:
             break;
         }
         // StartOfScan (image data) header
-        case(Marker.StartOfScan):
+        case Marker.StartOfScan:
         {
             int scanComponents = segment.buffer[2]; // Number of components in the scan
 

@@ -24,7 +24,7 @@ import image;
 /**
 * Png loader.
 */
-class Png : Decoder
+class PngDecoder : Decoder
 {
     enum Chunk
     {
@@ -216,12 +216,18 @@ private:
         uint csum_calc = crc32(0, segment.buffer[4..$-4]);
         uint csum_read = fourBytesToInt(segment.buffer[$-4..$]);
         if (csum_calc != csum_read)
+        {
             csum_passed = false;
+            debug
+            {
+                if (m_logging) writeln("PNG: Error - checksum failed!");
+            }
+        }
 
         switch(segment.chunkType)
         {
-            // IHDR chunk contains height, width info
-        case(Chunk.IHDR):
+        // IHDR chunk contains height, width info
+        case Chunk.IHDR:
         {
             if (!csum_passed)
             {
@@ -281,7 +287,7 @@ private:
         }
 
         // Actual image data
-        case(Chunk.IDAT):
+        case Chunk.IDAT:
         {
             if (!csum_passed)
             {
@@ -293,7 +299,7 @@ private:
         }
 
         // Palette chunk
-        case(Chunk.PLTE):
+        case Chunk.PLTE:
         {
             if (!csum_passed)
             {
@@ -309,7 +315,7 @@ private:
         }
 
         // Image end
-        case(Chunk.IEND):
+        case Chunk.IEND:
         {
             // Flush out the rest of the stream
             uncompressStream(scanLine2, true);
@@ -333,27 +339,27 @@ private:
     {
         switch (m_colorType)
         {
-        case(0):   // greyscale
+        case 0:   // greyscale
         {
             m_nChannels = 1;
             switch(m_bitDepth)
             {
-            case(1):
+            case 1:
                 m_image = new Img!(Px.L8)(m_width, m_height);
                 m_pixelScale = 255;
                 break;
-            case(2):
+            case 2:
                 m_image = new Img!(Px.L8)(m_width, m_height);
                 m_pixelScale = 64;
                 break;
-            case(4):
+            case 4:
                 m_image = new Img!(Px.L8)(m_width, m_height);
                 m_pixelScale = 16;
                 break;
-            case(8):
+            case 8:
                 m_image = new Img!(Px.L8)(m_width, m_height);
                 break;
-            case(16):
+            case 16:
                 m_image = new Img!(Px.L16)(m_width, m_height);
                 break;
             default:
@@ -362,15 +368,15 @@ private:
             }
             break;
         }
-        case(2):   // rgb
+        case 2:   // rgb
         {
             m_nChannels = 3;
             switch(m_bitDepth)
             {
-            case(8):
+            case 8:
                 m_image = new Img!(Px.R8G8B8)(m_width, m_height);
                 break;
-            case(16):
+            case 16:
                 m_image = new Img!(Px.R16G16B16)(m_width, m_height);
                 break;
             default:
@@ -379,21 +385,21 @@ private:
             }
             break;
         }
-        case(3):   // palette
+        case 3:   // palette
         {
             m_nChannels = 1;
             m_image = new Img!(Px.R8G8B8)(m_width, m_height);
             break;
         }
-        case(4):   // greyscale + alpha
+        case 4:   // greyscale + alpha
         {
             m_nChannels = 2;
             switch(m_bitDepth)
             {
-            case(8):
+            case 8:
                 m_image = new Img!(Px.L8A8)(m_width, m_height);
                 break;
-            case(16):
+            case 16:
                 m_image = new Img!(Px.L16A16)(m_width, m_height);
                 break;
             default:
@@ -402,15 +408,15 @@ private:
             }
             break;
         }
-        case(6):   // rgba
+        case 6:   // rgba
         {
             m_nChannels = 4;
             switch(m_bitDepth)
             {
-            case(8):
+            case 8:
                 m_image = new Img!(Px.R8G8B8A8)(m_width, m_height);
                 break;
-            case(16):
+            case 16:
                 m_image = new Img!(Px.R16G16B16A16)(m_width, m_height);
                 break;
             default:
@@ -703,26 +709,26 @@ private:
 
         switch(filterType)
         {
-        case(0):   // no filtering, excellent
+        case 0:   // no filtering, excellent
         {
             break;
         }
-        case(1):   // difference filter, using previous pixel on same scanline
+        case 1:   // difference filter, using previous pixel on same scanline
         {
             filter1();
             break;
         }
-        case(2):   // difference filter, using pixel on scanline above, same column
+        case 2:   // difference filter, using pixel on scanline above, same column
         {
             filter2();
             break;
         }
-        case(3):   // average filter, average of pixel above and pixel to left
+        case 3:   // average filter, average of pixel above and pixel to left
         {
             filter3();
             break;
         }
-        case(4):   // Paeth filter
+        case 4:   // Paeth filter
         {
             filter4();
             break;
@@ -812,3 +818,255 @@ private:
 
     } // filter4
 } // Png
+
+
+/**
+* PNG encoder for writing out Image classes to files as PNG
+*/
+class PngEncoder : Encoder
+{
+    bool write(Image img, string filename)
+    {
+        ubyte[] outData = pngHeader.dup;
+
+        // Add in image header info
+        appendChunk(createHeaderChunk(img), outData);
+
+        // Filter and compress the data
+        auto rowLengthBytes = img.width*img.stride;
+
+        // The first scanline - has nothing above it, limits filter options
+        PNGChunk idat = PNGChunk("IDAT");
+        ubyte[] imageData;
+        ubyte[] scanLine1, scanLine2;
+        scanLine1.length = rowLengthBytes; // initialize this scanline, since it will be empty to start
+
+        foreach(row; 0..img.height)
+        {
+            scanLine2 = img.pixels[row*rowLengthBytes..(row+1)*rowLengthBytes].dup;
+            ubyte filterType;
+            ubyte[] filtered = filter(img, scanLine1, scanLine2, filterType);
+            imageData ~= filterType ~ filtered;
+
+            // Swap the scanlines
+            auto tmp = scanLine1;
+            scanLine1 = scanLine2;
+            scanLine2 = scanLine1;
+            scanLine2.clear;
+        }
+
+        idat.data = cast(ubyte[]) compress(cast(void[])imageData);
+        appendChunk(idat, outData);
+        appendChunk(PNGChunk("IEND"), outData);
+        std.file.write(filename, outData);
+        writeln(outData.length);
+        return true;
+    }
+
+private:
+
+    struct PNGChunk
+    {
+        string type;
+        ubyte[] data;
+    }
+
+    immutable static ubyte[] pngHeader = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    static ubyte[] function(in Image, in ubyte[], in ubyte[], out uint)[5] m_filters =
+                                [&PngEncoder.filter0, &PngEncoder.filter1,
+                                 &PngEncoder.filter2, &PngEncoder.filter3,
+                                 &PngEncoder.filter4];
+
+    static ubyte[] filter(in Image img, in ubyte[] scanLine1, ubyte[] scanLine2, out ubyte filterType)
+    {
+        /**
+        * For adaptive filtering, compute the output scanline using all five filters,
+        * total the absolute values, and pick the one which has the lowest absolute sum.
+        */
+        uint sum = 0, minSum = uint.max;
+        ubyte[] filtered = scanLine2.dup;
+
+        foreach(index, filter; m_filters)
+        {
+            auto s = filter(img, scanLine1, scanLine2, sum);
+            if (sum < minSum)
+            {
+                filtered = s;
+                minSum = sum;
+                filterType = cast(ubyte)index;
+            }
+        }
+        return filtered;
+    }
+
+    static ubyte[] filter0(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
+    {
+        ubyte[] filtered = scanLine2.dup;
+        absSum = reduce!("a + abs(b)")(0, filtered);
+        return filtered;
+    }
+
+    static ubyte[] filter1(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
+    {
+        ubyte[] filtered = scanLine2.dup;
+        uint s = img.stride;
+        absSum = reduce!("a + abs(b)")(0, filtered[0..s]);
+        for(int i = s; i < scanLine2.length; i++)
+        {
+            filtered[i] = cast(ubyte) (scanLine2[i] - scanLine2[i-s]);
+            absSum += abs(filtered[i]);
+        }
+        return filtered;
+    }
+
+    static ubyte[] filter2(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
+    {
+        ubyte[] filtered = scanLine2.dup;
+        filtered[] = scanLine2[] - scanLine1[];
+        absSum = reduce!("a + abs(b)")(0, filtered);
+        return filtered;
+    }
+
+    static ubyte[] filter3(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
+    {
+        ubyte[] filtered = scanLine2.dup;
+
+        for(int i = 0; i < img.stride; i++)
+        {
+            filtered[i] = cast(ubyte) (scanLine2[i] - (scanLine1[i]/2) );
+            absSum += abs(filtered[i]);
+        }
+
+        for(int i = img.stride; i < scanLine2.length; i++)
+        {
+            filtered[i] = cast(ubyte) (scanLine2[i] - (scanLine1[i]+scanLine2[i-img.stride])/2);
+            absSum += abs(filtered[i]);
+        }
+        return filtered;
+    }
+
+    static ubyte[] filter4(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
+    {
+        int paeth(ubyte a, ubyte b, ubyte c)
+        {
+            int p = (a + b - c);
+            int pa = abs(p - a);
+            int pb = abs(p - b);
+            int pc = abs(p - c);
+
+            int pred = 0;
+            if ((pa <= pb) && (pa <= pc))
+            {
+                pred = a;
+            }
+            else if (pb <= pc)
+            {
+                pred = b;
+            }
+            else
+            {
+                pred = c;
+            }
+            return pred;
+        }
+
+        ubyte[] filtered = scanLine2.dup;
+
+        for(int i = 0; i < img.stride; i++)
+        {
+            filtered[i] = cast(ubyte) (scanLine2[i] - paeth(0, scanLine1[i], 0) );
+            absSum += abs(filtered[i]);
+        }
+
+        for(int i = img.stride; i < scanLine2.length; i++)
+        {
+            filtered[i] = cast(ubyte) (scanLine2[i] - paeth(scanLine2[i-img.stride],
+                                                            scanLine1[i],
+                                                            scanLine1[i-img.stride]) );
+            absSum += abs(filtered[i]);
+        }
+        return filtered;
+    }
+
+
+    PNGChunk createHeaderChunk(Image img)
+    {
+        PNGChunk ihdr;
+        ihdr.type = "IHDR";
+        ihdr.data.length = 13;
+        ihdr.data[0..4] = bigEndianBytes(img.width);
+        ihdr.data[4..8] = bigEndianBytes(img.height);
+        ihdr.data[8] = cast(ubyte)img.bitDepth;
+        ihdr.data[9] = getColorType(img);
+        ihdr.data[10..12] = [0,0];
+        ihdr.data[12] = 0; // non-interlaced
+        return ihdr;
+    }
+
+    void appendChunk(PNGChunk chunk, ref ubyte[] data)
+    {
+        assert(chunk.type.length == 4);
+
+        ubyte[] typeAndData = cast(ubyte[])chunk.type ~ chunk.data;
+        uint checksum = crc32(0, typeAndData);
+
+        data ~= bigEndianBytes(chunk.data.length) ~
+                typeAndData ~
+                bigEndianBytes(checksum);
+
+    }
+
+    ubyte getColorType(Image img)
+    {
+        ubyte colorType;
+        if (img.pixelFormat == Px.L8 ||
+            img.pixelFormat == Px.L16 )
+        {
+            colorType = 0;
+        }
+        else if (img.pixelFormat == Px.L8A8 ||
+                 img.pixelFormat == Px.L16A16 )
+        {
+            colorType = 4;
+        }
+        else if (img.pixelFormat == Px.R8G8B8 ||
+                 img.pixelFormat == Px.R16G16B16 )
+        {
+            colorType = 2;
+        }
+        else if (img.pixelFormat == Px.R8G8B8A8 ||
+                 img.pixelFormat == Px.R16G16B16A16 )
+        {
+            colorType = 6;
+        }
+        else
+        {
+            assert(0);
+        }
+        return colorType;
+    }
+
+    version (LittleEndian)
+    {
+        ubyte[] bigEndian(ubyte[] v)
+        {
+            return [v[3],v[2],v[1],v[0]];
+        }
+    }
+    else // bigEndian version
+    {
+        ubyte[] bigEndian(ubyte[] v)
+        {
+            return v;
+        }
+    }
+
+    ubyte[] bigEndianBytes(uint value)
+    {
+        uint[] inv = [value];
+        ubyte[] v = cast(ubyte[])inv;
+        return bigEndian(v);
+    }
+}
+
+

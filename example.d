@@ -27,9 +27,43 @@ int main()
     // Grab a directory listing
     auto dFiles = dirEntries("testimages/","*.png",SpanMode.shallow);
 
+
+    Image img = load(dFiles.front.name, true);
+    img.write("c:/cal/testimage.png");
+
+
+    IMGError err;
+    Image pic = load("c:/cal/testimage.png", true, err);
+    writeln(err.message);
+    pic.resize(512, 512, Image.ResizeAlgo.NEAREST);
+
     // Make a window and simpledisplay image, with fixed width to keep things simple
     sd.SimpleWindow wnd = new sd.SimpleWindow(512, 512, "Press any key to change image, ESC to close");
     auto sd_image = new sd.Image(512, 512);
+
+            foreach(x; 0..512)
+            {
+                foreach(y; 0..512)
+                {
+
+                    // get the pixel at location (x,y)
+                    Pixel pix = pic[x,y];
+
+                    // Use the alpha channel (if any) to blend the image to a white background
+                    int r = cast(int)((pix.a/255.)*pix.r + (1 - pix.a/255.)*255);
+                    int g = cast(int)((pix.a/255.)*pix.g + (1 - pix.a/255.)*255);
+                    int b = cast(int)((pix.a/255.)*pix.b + (1 - pix.a/255.)*255);
+
+                    // Paint in the pixel in simpledisplay image
+                    sd_image.putPixel(x, y, sd.Color(r, g, b));
+                }
+            }
+            // Draw the current image
+            wnd.draw().drawImage(sd.Point(0,0), sd_image);
+
+
+    return 0;
+
 
     // This is the simpledisplay event loop
     wnd.eventLoop(0,
