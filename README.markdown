@@ -20,9 +20,11 @@ Implemented encoders:
 output PNG's are non-interlaced and only contain critical chunks.
 
 Usage - writing out a PNG:
+```
     ubyte[] data = myImageData;  // note that it must be pixel interleaved for RGB/RGBA to work
     Image myImg = new Img!(Px.R8G8B8)(width, height, data);
 	myImg.write("path/to/output.png");
+```
 
 simpledisplay.d is from Adam Ruppe's repo: misc-stuff-including-D-programming-language-web-stuff.
 
