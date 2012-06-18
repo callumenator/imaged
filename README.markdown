@@ -13,7 +13,7 @@ Usage - loading from a stream:
 ```
 Stream dataStream;
 Decoder dcoder = getDecoder("imagepath/imagefile.png");
-while(dcoder.parseStream(stream))
+while(dcoder.parseStream(dataStream))
 {
   do stuff, like draw the current interlaced png, fill the stream, etc.
 } 
@@ -31,11 +31,13 @@ myImg.write("path/to/output.png");
 ```
 
 Images:
-- the Image class can be used to hold various pixel formats. It also has routines for resizing, eg:
+- the Image class can be used to hold various pixel formats. It also has routines for resizing, e.g.:
+
 ``` 
 Image myImg; 
 myImg.resize(newWidth, newHeight, Image.ResizeAlgo.BILINEAR);
 ```
+
 - Resizing can be done by cropping (```Image.ResizeAlgo.BILINEAR```), nearest neighbour
 (```Image.ResizeAlgo.NEAREST```) or bilinear filtering (```Image.ResizeAlgo.BILINEAR```).
 
