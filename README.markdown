@@ -5,15 +5,19 @@ Implemented decoders:
 - PNG: loads all images in the PNG test suite. 
 
 Usage - loading from a file:
-    Image img = load("imagepath/imagefile.png");
+```
+Image img = load("imagepath/imagefile.png");
+```
 
 Usage - loading from a stream:
-    Stream dataStream;
-    Decoder dcoder = getDecoder("imagepath/imagefile.png");
-    while(dcoder.parseStream(stream))
-    {
-	    do stuff, like draw the current interlaced png, fill the stream, etc.
-    } 
+```
+Stream dataStream;
+Decoder dcoder = getDecoder("imagepath/imagefile.png");
+while(dcoder.parseStream(stream))
+{
+  do stuff, like draw the current interlaced png, fill the stream, etc.
+} 
+```
 
 Implemented encoders:
 - PNG: will write out PNG files from 8-bit versions of Image class. Uses adaptive filtering, 
@@ -21,10 +25,20 @@ output PNG's are non-interlaced and only contain critical chunks.
 
 Usage - writing out a PNG:
 ```
-    ubyte[] data = myImageData;  // note that it must be pixel interleaved for RGB/RGBA to work
-    Image myImg = new Img!(Px.R8G8B8)(width, height, data);
-	myImg.write("path/to/output.png");
+ubyte[] data = myImageData;  // note that it must be pixel interleaved for RGB/RGBA to work
+Image myImg = new Img!(Px.R8G8B8)(width, height, data);
+myImg.write("path/to/output.png");
 ```
+
+Images:
+- the Image class can be used to hold various pixel formats. It also has routines for resizing, eg:
+``` 
+Image myImg; 
+myImg.resize(newWidth, newHeight, Image.ResizeAlgo.BILINEAR);
+```
+- Resizing can be done by cropping (```Image.ResizeAlgo.BILINEAR```), nearest neighbour
+(```Image.ResizeAlgo.NEAREST```) or bilinear filtering (```Image.ResizeAlgo.BILINEAR```).
+
 
 simpledisplay.d is from Adam Ruppe's repo: misc-stuff-including-D-programming-language-web-stuff.
 
