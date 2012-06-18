@@ -25,16 +25,13 @@ ubyte clamp(const int x)
 
 
 /**
-* Jpeg class, which handles decoding. Great reference for baseline JPEG
+* Jpeg decoder. Great reference for baseline JPEG
 * deconding: http://www.opennet.ru/docs/formats/jpeg.txt.
 */
 class JpegDecoder : Decoder
 {
 
-    /**
-    * Algorithms for upsampling the chroma components,
-    * defaults to NEAREST.
-    */
+    // Algorithms for upsampling the chroma components, defaults to NEAREST.
     enum Upsampling
     {
         NEAREST,  // Nearest neighbour (fastest)
@@ -43,7 +40,7 @@ class JpegDecoder : Decoder
 
 
     // Empty constructor, useful for parsing a stream manually
-    this(bool logging = false, Upsampling algo = Upsampling.NEAREST)
+    this(in bool logging = false, in Upsampling algo = Upsampling.NEAREST)
     {
         m_logging = logging;
 
@@ -60,11 +57,11 @@ class JpegDecoder : Decoder
 
 
     // Constructor taking a filename
-    this(string filename, bool logging = false, Upsampling algo = Upsampling.NEAREST)
+    this(in string filename, in bool logging = false, in Upsampling algo = Upsampling.NEAREST)
     {
         this(logging, algo);
         parseFile(filename);
-    } // c'tor
+    }
 
 
     // Parse a single byte
@@ -229,7 +226,6 @@ private:
     void delegate(uint cmpIndex) resampleDgt;
 
     string format = "unknown"; // File format (will only do JFIF)
-
     ubyte nComponents, precision;
 
     struct Component
@@ -238,44 +234,44 @@ private:
         qtt, // quantization table id
         h_sample, // horizontal samples
         v_sample; // vertical samples
-        ubyte[] data;
-        int x, y, xi;
+        ubyte[] data; // a single MCU of data for this component
+        int x, y; // x, y are size of MCU
     }
     Component[] components;
 
     // Store the image comment field if any
     char[] comment;
 
-    // Quantization Tables (hash map of vectors)
+    // Quantization Tables (hash map of ubyte[64]'s, indexed by table index)
     ubyte[][int] quantTable;
 
     // Huffman tables are stored in a hash map
     ubyte[16] nCodes; // Number of codes of each bit length (cleared after each table is defined)
     struct hashKey
     {
-        ubyte index;    // Keys for the Huffman hash table
-        ubyte nBits;
-        short bitCode;
+        ubyte index;    // Table index
+        ubyte nBits;    // Number of bits in code
+        short bitCode;  // Actual bit code
     }
     ubyte[hashKey] huffmanTable;
 
     // Track the state of a scan segment
     struct ScanState
     {
-        short cmpIdx = 0;
+        short cmpIdx = 0; // Current component index in scan
 
         int MCUWidth, MCUHeight; // Dimensions of an MCU
         int nxMCU, nyMCU, xMCU, yMCU; // Number of MCU's, and current MCU
 
         uint buffer = 0, bufferLength = 0, needBits = 0;
         bool comparing = true;
-        ubyte[3] dct, act, nCmpBlocks;
+        ubyte[3] dct, act, nCmpBlocks; // dct, act store the DC and AC table indexes for each component
 
-        int[3] dcTerm;
-        int[64] dctComponents;
-        uint dctCmpIndex = 0, blockNumber = 0;
-        int restartInterval;
-        int MCUSParsed;
+        int[3] dcTerm;  // DC coefficients for each component
+        int[64] dctComponents; // DCT coefficients for current component
+        uint dctCmpIndex = 0, blockNumber = 0; // DCT coefficient index and current block in MCU
+        int restartInterval; // How many MCU's are parsed before a restart (reset the DC terms)
+        int MCUSParsed; // Number of image MCU's parsed, for use with restart interval
     }
     ScanState scState; // ditto
 
@@ -288,7 +284,7 @@ private:
     JPGSegment segment;
 
     bool m_logging;
-    short x, y;
+    short x, y; // These are the final image width and height
 
     // Process a segment header
     void processHeader()
@@ -299,8 +295,7 @@ private:
         */
         switch(currentMarker)
         {
-        // Comment segment
-        case Marker.Comment:
+        case Marker.Comment: // Comment segment
         {
             comment = cast(char[])segment.buffer[2..$];
 
@@ -310,8 +305,7 @@ private:
             }
             break;
         }
-        // App0, indicates JFIF format
-        case Marker.App0:
+        case Marker.App0: // App0, indicates JFIF format
         {
             if (previousMarker == Marker.StartOfImage)
             {
@@ -319,8 +313,7 @@ private:
             }
             break;
         }
-        // Restart interval definition
-        case Marker.RestartIntervalDef:
+        case Marker.RestartIntervalDef: // Restart interval definition
         {
             scState.restartInterval = cast(int) (segment.buffer[2] << 8 | segment.buffer[3]);
 
@@ -330,8 +323,7 @@ private:
             }
             break;
         }
-        // A quantization table definition
-        case Marker.QuantTableDef:
+        case Marker.QuantTableDef: // A quantization table definition
         {
             for (int i = 2; i < segment.buffer.length; i += 65)
             {
@@ -346,8 +338,7 @@ private:
             }
             break;
         }
-        // Baseline frame
-        case Marker.HuffBaselineDCT:
+        case Marker.HuffBaselineDCT: // Baseline frame
         {
             ubyte precision = segment.buffer[2];
             y = cast(short) (segment.buffer[3] << 8 | segment.buffer[4]);
@@ -371,15 +362,13 @@ private:
             }
             break;
         }
-        // Progressive JPEG, cannot decode
-        case Marker.HuffProgressiveDCT:
+        case Marker.HuffProgressiveDCT: // Progressive JPEG, cannot decode
         {
             m_errorState.code = 1;
             m_errorState.message = "JPG: Progressive JPEG detected, unable to load";
             break;
         }
-        // Huffman Table Definition, the mapping between bitcodes and Huffman codes
-        case Marker.HuffmanTableDef:
+        case Marker.HuffmanTableDef: // Huffman Table Definition, the mapping between bitcodes and Huffman codes
         {
             int i = 2;
             while (i < segment.buffer.length)
@@ -419,8 +408,7 @@ private:
             }
             break;
         }
-        // StartOfScan (image data) header
-        case Marker.StartOfScan:
+        case Marker.StartOfScan: // StartOfScan (image data) header
         {
             int scanComponents = segment.buffer[2]; // Number of components in the scan
 
@@ -479,7 +467,6 @@ private:
             }
             break;
         }
-
         default:
         {
             debug
@@ -873,7 +860,7 @@ private:
 
             int dcterm = block[0] << 2;
             block[0] = block[8] = block[16] = block[24] =
-                                                  block[32] = block[40] = block[48] = block[56] = dcterm;
+            block[32] = block[40] = block[48] = block[56] = dcterm;
             return;
         }
 
@@ -980,4 +967,5 @@ private:
         outData[3] = clamp((x3+t0) >> 17);
         outData[4] = clamp((x3-t0) >> 17);
     } // IDCT_1D_ROW
-} // Jpeg
+
+} // JpegDecoder

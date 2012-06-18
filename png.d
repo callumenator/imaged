@@ -16,13 +16,11 @@ import std.file,
        std.zlib,
        std.stream;
 
-
-
 import image;
 
 
 /**
-* Png loader.
+* Png decoder.
 */
 class PngDecoder : Decoder
 {
@@ -37,7 +35,7 @@ class PngDecoder : Decoder
 
 
     // Empty constructor, usefule for parsing a stream manually
-    this(bool logging = false)
+    this(in bool logging = false)
     {
         m_logging = logging;
         zliber = new UnCompress();
@@ -45,7 +43,7 @@ class PngDecoder : Decoder
 
 
     // Constructor taking a filename
-    this(string filename, bool logging = false)
+    this(in string filename, in bool logging = false)
     {
         this(logging);
         parseFile(filename);
@@ -226,8 +224,7 @@ private:
 
         switch(segment.chunkType)
         {
-        // IHDR chunk contains height, width info
-        case Chunk.IHDR:
+        case Chunk.IHDR: // IHDR chunk contains height, width info
         {
             if (!csum_passed)
             {
@@ -271,6 +268,7 @@ private:
                 m_stride = 1;
             }
 
+            // Initialize this scanLine, since it will be empty initially
             scanLine1 = new ubyte[](m_bytesPerScanline);
 
             debug
@@ -285,9 +283,7 @@ private:
             }
             break;
         }
-
-        // Actual image data
-        case Chunk.IDAT:
+        case Chunk.IDAT: // Actual image data
         {
             if (!csum_passed)
             {
@@ -297,9 +293,7 @@ private:
             }
             break;
         }
-
-        // Palette chunk
-        case Chunk.PLTE:
+        case Chunk.PLTE: // Palette chunk
         {
             if (!csum_passed)
             {
@@ -313,9 +307,7 @@ private:
 
             break;
         }
-
-        // Image end
-        case Chunk.IEND:
+        case Chunk.IEND: // Image end
         {
             // Flush out the rest of the stream
             uncompressStream(scanLine2, true);
@@ -440,17 +432,17 @@ private:
             if (i % 8 == 0) m_pixPerLine[0] ++;
             if (i % 8 == 4) m_pixPerLine[1] ++;
             if (i % 8 == 0 ||
-                    i % 8 == 4) m_pixPerLine[2] ++;
+                i % 8 == 4) m_pixPerLine[2] ++;
             if (i % 8 == 2 ||
-                    i % 8 == 6) m_pixPerLine[3] ++;
+                i % 8 == 6) m_pixPerLine[3] ++;
             if (i % 8 == 0 ||
-                    i % 8 == 2 ||
-                    i % 8 == 4 ||
-                    i % 8 == 6 ) m_pixPerLine[4] ++;
+                i % 8 == 2 ||
+                i % 8 == 4 ||
+                i % 8 == 6 ) m_pixPerLine[4] ++;
             if (i % 8 == 1 ||
-                    i % 8 == 3 ||
-                    i % 8 == 5 ||
-                    i % 8 == 7 ) m_pixPerLine[5] ++;
+                i % 8 == 3 ||
+                i % 8 == 5 ||
+                i % 8 == 7 ) m_pixPerLine[5] ++;
         }
         m_pixPerLine[6] = m_width;
 
@@ -460,17 +452,17 @@ private:
             if (i % 8 == 0) m_scanLines[1] ++;
             if (i % 8 == 4) m_scanLines[2] ++;
             if (i % 8 == 0 ||
-                    i % 8 == 4) m_scanLines[3] ++;
+                i % 8 == 4) m_scanLines[3] ++;
             if (i % 8 == 2 ||
-                    i % 8 == 6 ) m_scanLines[4] ++;
+                i % 8 == 6 ) m_scanLines[4] ++;
             if (i % 8 == 0 ||
-                    i % 8 == 2 ||
-                    i % 8 == 4 ||
-                    i % 8 == 6 ) m_scanLines[5] ++;
+                i % 8 == 2 ||
+                i % 8 == 4 ||
+                i % 8 == 6 ) m_scanLines[5] ++;
             if (i % 8 == 1 ||
-                    i % 8 == 3 ||
-                    i % 8 == 5 ||
-                    i % 8 == 7 ) m_scanLines[6] ++;
+                i % 8 == 3 ||
+                i % 8 == 5 ||
+                i % 8 == 7 ) m_scanLines[6] ++;
         }
     } // setInterlace
 
@@ -487,7 +479,7 @@ private:
             data = cast(ubyte[])(zliber.uncompress(cast(void[])stream));
         }
         else
-        {
+        {   // finalize means flush out any remaining data
             data = cast(ubyte[])(zliber.flush());
         }
 
@@ -495,7 +487,7 @@ private:
         int bytesPerLine, nscanLines;
         passInfo(bytesPerLine, nscanLines);
 
-        int taken = 0, takeLen = 0;
+        int taken = 0, takeLen = 0; // bytes taken, bytes to take
         while (taken < data.length)
         {
             // Put data into the lower scanline first
@@ -542,11 +534,10 @@ private:
                     sLine[] *= cast(ubyte)m_pixelScale;
                 }
 
-
-                // Put it into the image
+                // Put it into the Image
                 if (m_interlace == 0)
                 {
-                    // Not interlaced
+                    // Non-interlaced
                     m_image.setRow(m_currentScanLine, sLine);
                 }
                 else
@@ -555,11 +546,12 @@ private:
                     with(m_ilace)
                     {
                         int pass = m_interlacePass;
-                        int col = start_col[pass];
+                        int col = start_col[pass]; // Image column
                         int i = 0; // scanline offset
 
                         while (col < m_width)
                         {
+                            // Max x,y indices to fill up to for a given pass
                             auto maxY = min(block_height[pass], m_height - imageRow);
                             auto maxX = min(block_width[pass], m_width - col);
 
@@ -567,8 +559,7 @@ private:
                             {
                                 foreach(px; 0..maxX)
                                 {
-                                    m_image.setPixel(col + px, imageRow + py,
-                                                     sLine[i..i+scanLineStride]);
+                                    m_image.setPixel(col + px, imageRow + py, sLine[i..i+scanLineStride]);
                                 }
                             }
 
@@ -621,8 +612,8 @@ private:
     // Calculate some per-pass info
     void passInfo(out int bytesPerLine, out int nscanLines)
     {
-        bytesPerLine = 0;
-        nscanLines = 0;
+        bytesPerLine = 0; // number of bytes in a scanline (dependent on interlace pass)
+        nscanLines = 0; // number of scanlines (also depends on interlace pass)
 
         if (m_interlace == 1)
         {
@@ -635,7 +626,7 @@ private:
                 {
                     bytesPerLine ++;
                 }
-                bytesPerLine ++;
+                bytesPerLine ++; // need to acount for the filter-type byte
             }
             else
             {
@@ -817,15 +808,22 @@ private:
         }
 
     } // filter4
-} // Png
+} // PngDecoder
 
 
 /**
-* PNG encoder for writing out Image classes to files as PNG
+* PNG encoder for writing out Image classes to files as PNG.
+* TODO: currently won't work with 16-bit Images.
 */
 class PngEncoder : Encoder
 {
-    bool write(Image img, string filename)
+    /**
+    * Params:
+    * img = the image containing the data to write as a png
+    * filename = filename of the output
+    * Returns: true if writing succeeded, else false.
+    */
+    bool write(in Image img, string filename)
     {
         ubyte[] outData = pngHeader.dup;
 
@@ -844,7 +842,9 @@ class PngEncoder : Encoder
         foreach(row; 0..img.height)
         {
             scanLine2 = img.pixels[row*rowLengthBytes..(row+1)*rowLengthBytes].dup;
-            ubyte filterType;
+
+            // Apply adaptive filter
+            ubyte filterType; // this will hold the actual filter that was used
             ubyte[] filtered = filter(img, scanLine1, scanLine2, filterType);
             imageData ~= filterType ~ filtered;
 
@@ -857,9 +857,13 @@ class PngEncoder : Encoder
 
         idat.data = cast(ubyte[]) compress(cast(void[])imageData);
         appendChunk(idat, outData);
+
+        // End the image with an IEND
         appendChunk(PNGChunk("IEND"), outData);
+
+        // Write the PNG
         std.file.write(filename, outData);
-        writeln(outData.length);
+
         return true;
     }
 
@@ -871,18 +875,27 @@ private:
         ubyte[] data;
     }
 
+    // THe required PNG header
     immutable static ubyte[] pngHeader = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    // Array of function pointers containing filter algorithms
     static ubyte[] function(in Image, in ubyte[], in ubyte[], out uint)[5] m_filters =
                                 [&PngEncoder.filter0, &PngEncoder.filter1,
                                  &PngEncoder.filter2, &PngEncoder.filter3,
                                  &PngEncoder.filter4];
 
+    /**
+    * Determines which filter type to apply to a given scanline by simply trying all of them,
+    * and calculating the sum of the absolute value in each filtered line. The filter which
+    * gives the minimum absolute sum will be used.
+    * Params:
+    * scanLine1 = the scanline $(I above) the scanline to be filtered
+    * scanLine2 = the scanline to be filtered
+    * filterType = a variable to hold the actual filter type that was used
+    * Returns: the filtered scanline
+    */
     static ubyte[] filter(in Image img, in ubyte[] scanLine1, ubyte[] scanLine2, out ubyte filterType)
     {
-        /**
-        * For adaptive filtering, compute the output scanline using all five filters,
-        * total the absolute values, and pick the one which has the lowest absolute sum.
-        */
         uint sum = 0, minSum = uint.max;
         ubyte[] filtered = scanLine2.dup;
 
@@ -899,6 +912,7 @@ private:
         return filtered;
     }
 
+    // Filter 0 means no filtering
     static ubyte[] filter0(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
     {
         ubyte[] filtered = scanLine2.dup;
@@ -906,6 +920,7 @@ private:
         return filtered;
     }
 
+    // Filter 1 is a difference between the current pixel and the previous pixl on same scanline
     static ubyte[] filter1(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
     {
         ubyte[] filtered = scanLine2.dup;
@@ -919,6 +934,7 @@ private:
         return filtered;
     }
 
+    // FIlter 2 is a difference between current pixel and same pixel on scanline above
     static ubyte[] filter2(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
     {
         ubyte[] filtered = scanLine2.dup;
@@ -927,6 +943,7 @@ private:
         return filtered;
     }
 
+    // Filter 3 is an average of previous pixel on same scanline ,and same pixel on line above
     static ubyte[] filter3(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
     {
         ubyte[] filtered = scanLine2.dup;
@@ -945,6 +962,7 @@ private:
         return filtered;
     }
 
+    // Paeth filter
     static ubyte[] filter4(in Image img, in ubyte[] scanLine1, in ubyte[] scanLine2, out uint absSum)
     {
         int paeth(ubyte a, ubyte b, ubyte c)
@@ -988,8 +1006,8 @@ private:
         return filtered;
     }
 
-
-    PNGChunk createHeaderChunk(Image img)
+    // Create the header chunk
+    PNGChunk createHeaderChunk(in Image img)
     {
         PNGChunk ihdr;
         ihdr.type = "IHDR";
@@ -1003,7 +1021,8 @@ private:
         return ihdr;
     }
 
-    void appendChunk(PNGChunk chunk, ref ubyte[] data)
+    // Append a chunk to the output data, fixing up endianness and calculating checksum
+    void appendChunk(in PNGChunk chunk, ref ubyte[] data)
     {
         assert(chunk.type.length == 4);
 
@@ -1013,10 +1032,10 @@ private:
         data ~= bigEndianBytes(chunk.data.length) ~
                 typeAndData ~
                 bigEndianBytes(checksum);
-
     }
 
-    ubyte getColorType(Image img)
+    // Figure out the PNG colortype of an image
+    ubyte getColorType(in Image img)
     {
         ubyte colorType;
         if (img.pixelFormat == Px.L8 ||
@@ -1046,27 +1065,32 @@ private:
         return colorType;
     }
 
+    // Convert a uint to corrct endianness for writing (must be in big endian for writing)
     version (LittleEndian)
     {
-        ubyte[] bigEndian(ubyte[] v)
+        ubyte[] bigEndian(in ubyte[] v)
         {
             return [v[3],v[2],v[1],v[0]];
         }
     }
     else // bigEndian version
     {
-        ubyte[] bigEndian(ubyte[] v)
+        ubyte[] bigEndian(in ubyte[] v)
         {
             return v;
         }
     }
 
+    /**
+    * Params: value: uint to convert to correct endianness
+    * Returns: a ubyte[4] array, with proper endianness
+    */
     ubyte[] bigEndianBytes(uint value)
     {
         uint[] inv = [value];
         ubyte[] v = cast(ubyte[])inv;
         return bigEndian(v);
     }
-}
+} // PngEncoder
 
 

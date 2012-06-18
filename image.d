@@ -82,7 +82,7 @@ abstract class Decoder
 
 
     // Parse a file directly
-    void parseFile(string filename)
+    void parseFile(in string filename)
     {
         // Loop through the image data
         auto data = cast(ubyte[]) read(filename);
@@ -105,7 +105,7 @@ abstract class Decoder
 
 
     // Parse from the stream. Returns the amount of data left in the stream.
-    size_t parseStream(Stream stream, size_t chunkSize = 100000)
+    size_t parseStream(Stream stream, in size_t chunkSize = 100000)
     {
         if (!stream.readable)
         {
@@ -134,7 +134,7 @@ abstract class Decoder
 
     // Getters
     @property Image image() { return m_image; }
-    @property IMGError errorState() { return m_errorState; } // ditto
+    @property IMGError errorState() const { return m_errorState; } // ditto
 
 protected:
     bool m_logging = false; // if true, will emit logs when in debug mode
@@ -146,7 +146,7 @@ protected:
 // Interface for an image encoder
 abstract class Encoder
 {
-    bool write(Image img, string filename);
+    bool write(in Image img, string filename);
 }
 
 
@@ -219,7 +219,7 @@ interface Image
     void setRow(size_t y, const(ubyte[]) data);
 
     // Return a copy of the current image
-    Image copy();
+    Image copy() const;
 
     // Resize the image, either by cropping, nearest neighbor or bilinear algorithms
     bool resize(uint newWidth, uint newHeight, ResizeAlgo algo = ResizeAlgo.NEAREST);
@@ -228,11 +228,12 @@ interface Image
     bool write(string filename, ImageFormat fmt = ImageFormat.GETFROMEXTENSION);
 
     // Getters
-    @property const uint width();
-    @property const uint height(); // ditto
-    @property const int stride(); // ditto
-    @property const uint bitDepth(); // ditto
-    @property Px pixelFormat(); // ditto
+    @property const(uint) width() const;
+    @property const(uint) height() const; // ditto
+    @property const(int) stride() const; // ditto
+    @property const(uint) bitDepth() const; // ditto
+    @property const(Px) pixelFormat() const; // ditto
+    @property const(ubyte[]) pixels() const; // ditto
     @property ref ubyte[] pixels(); // ditto
     @property ubyte* pixelsPtr(); // ditto
 }
@@ -550,7 +551,7 @@ class Img(Px F) : Image
 
 
     // Return an Image which is a copy of this one
-    Img!F copy()
+    Img!F copy() const
     {
         auto copy = new Img!F(m_width, m_height);
         copy.pixels = m_data.dup;
@@ -686,11 +687,12 @@ class Img(Px F) : Image
 
 
     // Getters
-    @property uint width() { return m_width; } // ditto
-    @property uint height() { return m_height; } // ditto
-    @property int stride() { return m_stride; } // ditto
-    @property uint bitDepth() { return m_bitDepth; } // ditto
-    @property Px pixelFormat() { return F; } // ditto
+    @property const(uint) width() const { return m_width; } // ditto
+    @property const(uint) height() const { return m_height; } // ditto
+    @property const(int) stride() const { return m_stride; } // ditto
+    @property const(uint) bitDepth() const { return m_bitDepth; } // ditto
+    @property const(Px) pixelFormat() const { return F; } // ditto
+    @property const(ubyte[]) pixels() const { return m_data; } // ditto
     @property ref ubyte[] pixels() { return m_data; } // ditto
     @property ubyte* pixelsPtr() { return m_data.ptr; } // ditto
 
