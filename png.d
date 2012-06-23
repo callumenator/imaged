@@ -1067,29 +1067,23 @@ private:
     // Convert a uint to corrct endianness for writing (must be in big endian/network order for writing)
     version (LittleEndian)
     {
-        ubyte[] bigEndian(in ubyte[] v)
+        uint bigEndian(uint value)
         {
-            return [v[3],v[2],v[1],v[0]];
+            return (value << 24) | ((value & 0x0000FF00) << 8)
+                   | ((value & 0x00FF0000) >> 8) | (value >> 24);
         }
     }
-    else // bigEndian version
+    else
     {
-        ubyte[] bigEndian(in ubyte[] v)
-        {
-            return v;
-        }
+        uint bigEndian(uint value) { return value; }
     }
 
-    /**
-    * Params: value: uint to convert to correct endianness
-    * Returns: a ubyte[4] array, with proper endianness
-    */
     ubyte[] bigEndianBytes(uint value)
     {
-        uint[] inv = [value];
-        ubyte[] v = cast(ubyte[])inv;
-        return bigEndian(v);
+        uint[] be = [bigEndian(value)];
+        return cast(ubyte[])be;
     }
+
 } // PngEncoder
 
 
