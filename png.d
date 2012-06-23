@@ -3,7 +3,7 @@
 /**
 * Copyright: Copyright 2012 -
 * License: $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
-* Authors: Callum Anderson
+* Authors: Callum Anderson, Stewart Gordon
 * Date: June 6, 2012
 */
 module png;
@@ -833,7 +833,6 @@ class PngEncoder : Encoder
         // Filter and compress the data
         auto rowLengthBytes = img.width*img.stride;
 
-        // The first scanline - has nothing above it, limits filter options
         PNGChunk idat = PNGChunk("IDAT");
         ubyte[] imageData;
         ubyte[] scanLine1, scanLine2;
@@ -1065,7 +1064,7 @@ private:
         return colorType;
     }
 
-    // Convert a uint to corrct endianness for writing (must be in big endian for writing)
+    // Convert a uint to corrct endianness for writing (must be in big endian/network order for writing)
     version (LittleEndian)
     {
         ubyte[] bigEndian(in ubyte[] v)
