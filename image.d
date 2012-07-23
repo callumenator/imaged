@@ -702,7 +702,7 @@ private:
     // Get the byte index and bit offset for a given (x,y)
     uint getIndex(size_t x, size_t y)
     {
-        return (x + y*m_width)*m_stride;
+        return cast(uint)(x + y*m_width)*m_stride;
     }
 
 

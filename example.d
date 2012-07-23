@@ -25,7 +25,7 @@ int main()
     */
 
     // Grab a directory listing
-    auto dFiles = dirEntries("testimages/","*.png",SpanMode.shallow);
+    auto dFiles = dirEntries("testimages/","*.jpg", SpanMode.depth);
 
     // Make a window and simpledisplay image, with fixed width to keep things simple
     sd.SimpleWindow wnd = new sd.SimpleWindow(512, 512, "Press any key to change image, ESC to close");

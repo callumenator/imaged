@@ -491,7 +491,7 @@ private:
         while (taken < data.length)
         {
             // Put data into the lower scanline first
-            takeLen = bytesPerLine - scanLine2.length;
+            takeLen = cast(int) (bytesPerLine - scanLine2.length);
             if (takeLen > 0 && taken + takeLen <= data.length)
             {
                 scanLine2 ~= data[taken..taken+takeLen];
@@ -1028,7 +1028,7 @@ private:
         ubyte[] typeAndData = cast(ubyte[])chunk.type ~ chunk.data;
         uint checksum = crc32(0, typeAndData);
 
-        data ~= bigEndianBytes(chunk.data.length) ~
+        data ~= bigEndianBytes(cast(uint)chunk.data.length) ~
                 typeAndData ~
                 bigEndianBytes(checksum);
     }
