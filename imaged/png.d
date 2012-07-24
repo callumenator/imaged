@@ -827,7 +827,8 @@ class PngEncoder : Encoder
     */
     bool write(in Image img, string filename)
     {
-        ubyte[] outData = pngHeader.dup;
+        // The required PNG header
+        ubyte[] outData = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
         // Add in image header info
         appendChunk(createHeaderChunk(img), outData);
@@ -875,9 +876,6 @@ private:
         string type;
         ubyte[] data;
     }
-
-    // THe required PNG header
-    immutable static ubyte[] pngHeader = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
     // Array of function pointers containing filter algorithms
     static ubyte[] function(in Image, in ubyte[], in ubyte[], out uint)[5] m_filters =
