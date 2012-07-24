@@ -15,7 +15,6 @@ import
 
 int main()
 {
-
     /**
     * For simple usage, loading from a file can be achieved by:
     * Image pic = load(string filename);

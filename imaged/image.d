@@ -68,6 +68,88 @@ Encoder getEncoder(string filename)
 }
 
 
+/**
+* If you set version = OpenGL, need to have derelict. The functions
+* below allow you to create an OpenGL texture from an Image, and then
+* throw away the image.
+*/
+version(OpenGL)
+{
+    import
+        derelict.opengl.gl,
+        derelict.opengl.extfuncs;
+
+    GLuint loadTexture(string filename, bool logging = false, ref IMGError err = IMGError())
+    {
+        // Keep a static lookup table for images/textures which have already been loaded
+        static GLuint[string] loadedTextures;
+
+        auto ptr = filename in loadedTextures;
+        if (ptr !is null)
+        {
+            // Texture has already been loaded, just return the GL handle
+            return *ptr;
+        }
+        else
+        {
+            // Load the texture and store it in the lookup table
+            GLuint tex = makeGLTexture(filename, logging, err);
+            loadedTextures[filename] = tex;
+            return tex;
+        }
+    }
+
+    GLuint makeGLTexture(string filename, bool logging = false, ref IMGError err = IMGError())
+    {
+        GLuint tex = 0;
+        GLenum texformat;
+        GLint nchannels;
+
+        glGenTextures(1, &tex);
+        auto img = load(filename, logging, err);
+
+        if (img.pixelFormat == Px.R8G8B8)
+        {
+            nchannels = 3;
+            texformat = GL_RGB;
+        }
+        else if (img.pixelFormat == Px.R8G8B8A8)
+        {
+            nchannels = 4;
+            texformat = GL_RGBA;
+        }
+        else if (img.pixelFormat == Px.L8)
+        {
+            nchannels = 1;
+            texformat = GL_LUMINANCE;
+        }
+
+        /// Bind the texture object.
+        glBindTexture(GL_TEXTURE_2D, tex);
+
+        /// Set the texture interp properties.
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        /// Create the tex data.
+        if (DerelictGL.maxVersion() < GLVersion.GL30)
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+            glTexImage2D(GL_TEXTURE_2D, 0, nchannels, cast(int)img.width, cast(int)img.height, 0,
+                         texformat, GL_UNSIGNED_BYTE, img.pixels.ptr);
+        }
+        else
+        {
+            glTexImage2D(GL_TEXTURE_2D, 0, nchannels, cast(int)img.width, cast(int)img.height, 0,
+                         texformat, GL_UNSIGNED_BYTE, img.pixels.ptr);
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+
+        return tex;
+    } // makeGLTexture
+}
+
+
 // Structure to report loading/decoding errors
 struct IMGError
 {
