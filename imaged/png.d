@@ -4,19 +4,21 @@
 * Copyright: Copyright 2012 -
 * License: $(WEB www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
 * Authors: Callum Anderson, Stewart Gordon
-* Date: June 6, 2012
+* Date: July 24, 2012
 */
-module png;
+module imaged.png;
 
-import std.file,
-       std.stdio,
-       std.math,
-       std.algorithm,
-       std.conv,
-       std.zlib,
-       std.stream;
+import
+    std.file,
+    std.stdio,
+    std.math,
+    std.algorithm,
+    std.conv,
+    std.zlib,
+    std.stream;
 
-import image;
+import
+    imaged.image;
 
 
 /**

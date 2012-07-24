@@ -6,16 +6,18 @@
 * Authors: Callum Anderson
 * Date: June 6, 2012
 */
-module jpeg;
+module imaged.jpeg;
 
-import std.file,
-       std.stdio,
-       std.math,
-       std.algorithm,
-       std.conv,
-       std.stream;
+import
+    std.file,
+    std.stdio,
+    std.math,
+    std.algorithm,
+    std.conv,
+    std.stream;
 
-import image;
+import
+    imaged.image;
 
 // Clamp an integer to 0-255 (ubyte)
 ubyte clamp(const int x)

@@ -6,17 +6,19 @@
 * Authors: Callum Anderson
 * Date: June 8, 2012
 */
-module image;
+module imaged.image;
 
-import std.file,
-       std.math,
-       std.stdio,
-       std.conv,
-       std.path,
-       std.stream;
+import
+    std.file,
+    std.math,
+    std.stdio,
+    std.conv,
+    std.path,
+    std.stream;
 
-import jpeg;
-import png;
+import
+    imaged.jpeg,
+    imaged.png;
 
 
 // Convenience function for loading from a file

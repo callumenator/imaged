@@ -1,13 +1,17 @@
 
 module example;
 
-import std.stdio,
-std.datetime,
-std.file,
-std.stream;
+import
+    std.stdio,
+    std.datetime,
+    std.file,
+    std.stream;
 
-import image;
-import sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
+import
+    imaged.image;
+
+import
+    sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
 {
