@@ -99,13 +99,15 @@ version(OpenGL)
         else
         {
             // Load the texture and store it in the lookup table
-            GLuint tex = makeGLTexture(filename, logging, err);
+            GLuint tex = makeGLTexture(filename, internalFormat, logging, err);
             loadedTextures[filename] = tex;
             return tex;
         }
     }
 
-    GLuint makeGLTexture(string filename, bool logging = false, ref IMGError err = IMGError())
+    GLuint makeGLTexture(string filename, GLuint internalFormat = 0,
+                                          bool logging = false,
+                                          ref IMGError err = IMGError())
     {
         GLuint tex = 0;
         GLenum texformat;
