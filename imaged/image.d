@@ -79,7 +79,13 @@ version(OpenGL)
         derelict.opengl.gl,
         derelict.opengl.extfuncs;
 
-    GLuint loadTexture(string filename, bool logging = false, ref IMGError err = IMGError())
+    /**
+    * Set internal format to force a specific format, else the format will
+    * be chosen based on the image type.
+    */
+    GLuint loadTexture(string filename, GLuint internalFormat = 0,
+                                        bool logging = false,
+                                        ref IMGError err = IMGError())
     {
         // Keep a static lookup table for images/textures which have already been loaded
         static GLuint[string] loadedTextures;
@@ -124,6 +130,10 @@ version(OpenGL)
             texformat = GL_LUMINANCE;
         }
 
+        GLuint useFormat = nchannels;
+        if (internalFormat != 0)
+            useFormat = internalFormat;
+
         /// Bind the texture object.
         glBindTexture(GL_TEXTURE_2D, tex);
 
@@ -135,12 +145,12 @@ version(OpenGL)
         if (DerelictGL.maxVersion() < GLVersion.GL30)
         {
             glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
-            glTexImage2D(GL_TEXTURE_2D, 0, nchannels, cast(int)img.width, cast(int)img.height, 0,
+            glTexImage2D(GL_TEXTURE_2D, 0, useFormat, cast(int)img.width, cast(int)img.height, 0,
                          texformat, GL_UNSIGNED_BYTE, img.pixels.ptr);
         }
         else
         {
-            glTexImage2D(GL_TEXTURE_2D, 0, nchannels, cast(int)img.width, cast(int)img.height, 0,
+            glTexImage2D(GL_TEXTURE_2D, 0, useFormat, cast(int)img.width, cast(int)img.height, 0,
                          texformat, GL_UNSIGNED_BYTE, img.pixels.ptr);
             glGenerateMipmap(GL_TEXTURE_2D);
         }
