@@ -22,7 +22,7 @@ import
 
 
 // Convenience function for loading from a file
-Image load(string filename, bool logging = false, ref IMGError err = IMGError())
+Image load(string filename, bool logging = false)
 {
     Decoder dcd = getDecoder(filename, logging);
 
@@ -32,7 +32,6 @@ Image load(string filename, bool logging = false, ref IMGError err = IMGError())
     }
     else
     {
-        err = dcd.errorState;
         dcd.parseFile(filename);
         return dcd.image;
     }

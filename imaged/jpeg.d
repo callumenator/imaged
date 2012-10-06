@@ -67,7 +67,7 @@ class JpegDecoder : Decoder
 
 
     // Parse a single byte
-    void parseByte(ubyte bite)
+    override void parseByte(ubyte bite)
     {
         segment.buffer ~= bite;
 

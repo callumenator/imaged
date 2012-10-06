@@ -54,7 +54,7 @@ class PngDecoder : Decoder
 
 
     // Parse one byte
-    void parseByte(ubyte bite)
+    override void parseByte(ubyte bite)
     {
         segment.buffer ~= bite;
 
@@ -825,7 +825,7 @@ class PngEncoder : Encoder
     * filename = filename of the output
     * Returns: true if writing succeeded, else false.
     */
-    bool write(in Image img, string filename)
+    override bool write(in Image img, string filename)
     {
         // The required PNG header
         ubyte[] outData = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
