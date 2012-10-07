@@ -11,6 +11,7 @@ import
     imaged.image;
 
 import
+    sdc = arsd.color,
     sd = simpledisplay; /// Adam Ruppe's simpledisplay.d
 
 int main()
@@ -82,7 +83,7 @@ int main()
                     int b = cast(int)((pix.a/255.)*pix.b + (1 - pix.a/255.)*255);
 
                     // Paint in the pixel in simpledisplay image
-                    sd_image.putPixel(x, y, sd.Color(r, g, b));
+                    sd_image.putPixel(x, y, sdc.Color(r, g, b));
                 }
             }
             // Draw the current image
