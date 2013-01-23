@@ -22,7 +22,7 @@ import
 
 
 // Convenience function for loading from a file
-Image load(string filename, bool logging = false)
+Image load(string filename, out IMGError err, bool logging = false)
 {
     Decoder dcd = getDecoder(filename, logging);
 
@@ -32,6 +32,7 @@ Image load(string filename, bool logging = false)
     }
     else
     {
+        err = dcd.errorState;
         dcd.parseFile(filename);
         return dcd.image;
     }
@@ -84,7 +85,7 @@ version(OpenGL)
     */
     GLuint loadTexture(string filename, GLuint internalFormat = 0,
                                         bool logging = false,
-                                        ref IMGError err = IMGError())
+                                        IMGError err = IMGError())
     {
         // Keep a static lookup table for images/textures which have already been loaded
         static GLuint[string] loadedTextures;
@@ -106,14 +107,14 @@ version(OpenGL)
 
     GLuint makeGLTexture(string filename, GLuint internalFormat = 0,
                                           bool logging = false,
-                                          ref IMGError err = IMGError())
+                                          IMGError err = IMGError())
     {
         GLuint tex = 0;
         GLenum texformat;
         GLint nchannels;
 
         glGenTextures(1, &tex);
-        auto img = load(filename, logging, err);
+        auto img = load(filename, err, logging);
 
         if (img.pixelFormat == Px.R8G8B8)
         {
