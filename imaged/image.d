@@ -109,6 +109,8 @@ version(OpenGL)
                                           bool logging = false,
                                           IMGError err = IMGError())
     {
+        debug { writeln("Making GL Texture from: " ~ filename); }
+
         GLuint tex = 0;
         GLenum texformat;
         GLint nchannels;
@@ -120,16 +122,19 @@ version(OpenGL)
         {
             nchannels = 3;
             texformat = GL_RGB;
+            debug { writeln("Texture format is: GL_RGB"); }
         }
         else if (img.pixelFormat == Px.R8G8B8A8)
         {
             nchannels = 4;
             texformat = GL_RGBA;
+            debug { writeln("Texture format is: GL_RGBA"); }
         }
         else if (img.pixelFormat == Px.L8)
         {
             nchannels = 1;
             texformat = GL_LUMINANCE;
+            debug { writeln("Texture format is: GL_LUMINANCE"); }
         }
 
         GLuint useFormat = nchannels;
