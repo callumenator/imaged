@@ -38,7 +38,7 @@ Image myImg;
 myImg.resize(newWidth, newHeight, Image.ResizeAlgo.BILINEAR);
 ```
 
-- Resizing can be done by cropping (```Image.ResizeAlgo.BILINEAR```), nearest neighbour
+- Resizing can be done by cropping (```Image.ResizeAlgo.CROP```), nearest neighbour
 (```Image.ResizeAlgo.NEAREST```) or bilinear filtering (```Image.ResizeAlgo.BILINEAR```).
 
 
