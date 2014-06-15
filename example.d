@@ -29,10 +29,10 @@ int main()
     */
 
     // Grab a directory listing
-    auto dFiles = dirEntries("testimages/","*.jpg", SpanMode.depth);
+    auto dFiles = dirEntries("testimages/","*.png", SpanMode.depth);
 
     // Make a window and simpledisplay image, with fixed width to keep things simple
-    sd.SimpleWindow wnd = new sd.SimpleWindow(512, 512, "Press any key to change image, ESC to close");
+    sd.SimpleWindow wnd = new sd.SimpleWindow(512, 512, "Press space to change image, ESC to close");
     auto sd_image = new sd.Image(512, 512);
 
 
@@ -75,7 +75,7 @@ int main()
                 {
 
                     // get the pixel at location (x,y)
-                    Pixel pix = pic[x,y];
+                    Pixel pix = pic[x,y];                    
 
                     // Use the alpha channel (if any) to blend the image to a white background
                     int r = cast(int)((pix.a/255.)*pix.r + (1 - pix.a/255.)*255);
