@@ -69,15 +69,12 @@ Encoder getEncoder(string filename)
 
 
 /**
-* If you set version = OpenGL, need to have derelict. The functions
-* below allow you to create an OpenGL texture from an Image, and then
-* throw away the image.
+* The functions below allow you to create an OpenGL texture from an Image, and then
+* throw away the image. These functions assume that you have already called DerelictGL.load().
 */
 version(OpenGL)
 {
-    import
-        derelict.opengl.gl,
-        derelict.opengl.extfuncs;
+    import derelict.opengl3.gl;
 
     /**
     * Set internal format to force a specific format, else the format will
@@ -149,7 +146,7 @@ version(OpenGL)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         /// Create the tex data.
-        if (DerelictGL.maxVersion() < GLVersion.GL30)
+        if (DerelictGL3.loadedVersion < GLVersion.GL30)
         {
             glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
             glTexImage2D(GL_TEXTURE_2D, 0, useFormat, cast(int)img.width, cast(int)img.height, 0,
