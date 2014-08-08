@@ -1,7 +1,7 @@
 {
     "name": "imaged",
 
-    "description": "A little web service of mine.",
+    "description": "Image loading/writing library.",
     "authors": [
         "Callum Anderson",
         "Stewart Gordon",
@@ -30,7 +30,10 @@
         },
         {
             "name": "opengl",
-            "versions": ["OpenGL"]
+            "versions": ["OpenGL"],
+            "dependencies": {
+                "derelict-gl3": ">=1.0.4"
+            }
         }
     ]
 }
